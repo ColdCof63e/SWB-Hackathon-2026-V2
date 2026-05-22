@@ -7,6 +7,7 @@ export default function JobScanner() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [scanningStep, setScanningStep] = useState('');
+  const [jdUrl, setJdUrl] = useState("");
 
   // Quick Preset Samples for Testing/Demoing
   const loadPreset = (type) => {
@@ -73,9 +74,29 @@ export default function JobScanner() {
         setScanningStep(steps[currentStep]);
       } else {
         clearInterval(interval);
-        performAnalysis();
+        
+        // Fetch from API with local fallback
+        fetch('/api/scan', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ description, recruiterInfo, jdUrl })
+        })
+        .then((res) => {
+          if (!res.ok) throw new Error('API server error');
+          return res.json();
+        })
+        .then((data) => {
+          setScanResult(data);
+          setIsScanning(false);
+        })
+        .catch((err) => {
+          console.warn('API scanner offline, using local heuristics engine:', err.message);
+          performAnalysis();
+        });
       }
-    }, 400);
+    }, 200); // slightly faster transitions for better UX
   };
 
   const performAnalysis = () => {
@@ -167,6 +188,7 @@ export default function JobScanner() {
     }
 
     setScanResult({
+      trustScore: score,
       score,
       status,
       overallVerdict,
@@ -186,6 +208,7 @@ export default function JobScanner() {
   const handleReset = () => {
     setDescription('');
     setRecruiterInfo('');
+    setJdUrl('');
     setScanResult(null);
   };
 
@@ -202,6 +225,18 @@ export default function JobScanner() {
           <p className="scanner-intro">
             Paste a full job listing text block and optional metadata to test if the position is legitimate, unverified, or a phishing scam.
           </p>
+
+          <div className="input-row">
+            <div className="input-group">
+              <label className='input-label'>Job Posting URL (Optional)</label>
+              <input
+              type='url'
+              className='scan-input'
+              placeholder='e.g., https://company.com/careers/job-123'
+              value={jdUrl}
+              onChange={(e) => setJdUrl(e.target.value)}/>
+            </div>
+          </div>
 
           <div className="input-group">
             <label className="input-label">Job Posting Text</label>
@@ -281,11 +316,11 @@ export default function JobScanner() {
                         scanResult.status === 'Verified' ? 'status-high' : 
                         scanResult.status === 'Suspicious' ? 'status-mid' : 'status-low'
                       }`}
-                      style={{ width: `${scanResult.score}%` }}
+                      style={{ width: `${scanResult.trustScore ?? scanResult.score}%` }}
                     />
                   </div>
                   <div className="gauge-labels">
-                    <span className="score-number-big">{scanResult.score}%</span>
+                    <span className="score-number-big">{scanResult.trustScore ?? scanResult.score}%</span>
                     <span className="score-description">AI Trust Score</span>
                   </div>
                 </div>
@@ -791,6 +826,18 @@ export default function JobScanner() {
         .bullet-indicator {
           flex-shrink: 0;
           margin-top: 2px;
+        }
+
+        .inputs-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+
+        @media (max-width: 600px) {
+          .inputs-row {
+            grid-template-columns: 1fr;
+          }
         }
 
         @media (max-width: 900px) {

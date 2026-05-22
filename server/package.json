@@ -1,0 +1,17 @@
+{
+  "name": "trustremote-server",
+  "version": "1.0.0",
+  "description": "Backend API server for TrustRemote job verification portal",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongoose": "^9.6.2"
+  }
+}
