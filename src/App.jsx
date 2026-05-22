@@ -22,6 +22,7 @@ function App() {
   const [formCategory, setFormCategory] = useState('Software Engineering');
   const [formRecruiter, setFormRecruiter] = useState('');
   const [formDesc, setFormDesc] = useState('');
+  const [formJdUrl, setFormJdUrl] = useState('')
 
   // Fetch Jobs from backend on Mount
   useEffect(() => {
@@ -62,7 +63,8 @@ function App() {
         salary: formSalary,
         category: formCategory,
         recruiterInfo: formRecruiter,
-        description: formDesc
+        description: formDesc,
+        jdUrl: formJdUrl
       })
     })
       .then((res) => {
@@ -74,7 +76,7 @@ function App() {
         const updatedJobs = [newJob, ...jobs];
         setJobs(updatedJobs);
         setSelectedJob(newJob); // Select immediately
-        setShowPostModal(false);
+        // setShowPostModal(false);
         setIsSubmitting(false);
 
         // Reset fields
@@ -84,6 +86,7 @@ function App() {
         setFormSalary('');
         setFormRecruiter('');
         setFormDesc('');
+        setFormJdUrl('');
 
         alert(`AI Scan Complete! Vetted with a trust score of ${newJob.trustScore}% (${newJob.status}).`);
       })
@@ -111,10 +114,10 @@ function App() {
                 Filter by score or keywords to avoid hiring scams and low-quality listings.
               </p>
               
-              <button className="post-job-trigger" onClick={() => setShowPostModal(true)}>
+              {/* <button className="post-job-trigger" onClick={() => setShowPostModal(true)}>
                 <Plus size={16} />
                 <span>Post & AI-Vet Job</span>
-              </button>
+              </button> */}
             </header>
 
             {/* Statistics Dashboard */}
@@ -137,7 +140,7 @@ function App() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'scanner' ? (
           <div className="scanner-view animate-fade-in">
             {/* Header Description */}
             <header className="page-header">
@@ -151,10 +154,176 @@ function App() {
             {/* Scanner Tool */}
             <JobScanner />
           </div>
+        ) : (
+          // Recruiter Console
+         <div className="recruiter-view animate-fade-in">
+          <header className='page-header'>
+            <h1>Recruiter Console</h1>
+            <p>Post new vacancies and analyze their Legitimacy
+              profiles. All listings undergo a security assessment
+               against scam indicators prior to indexing.
+            </p>
+          </header>
+
+          <div className="recruiter-grid">
+            {/* Left Pane: Posting & Vetting form */}
+            <div className="recruiter-form-panel glass">
+              <div className="panel-header">
+                <Shield className="panel-icon" size={18} />
+                <h4> Post & AI-Vet a New Job</h4>
+              </div>
+
+              <form onSubmit={handlePostJob} className='recruiter-form'>
+                <div className="recruiter-form-grid">
+                  <div className="form-group">
+                    <label> Job Title*</label>
+                    <input
+                    type='text'
+                    required
+                    placeholder="e.g. Senior Test Engieer"
+                    value={formTitle}
+                    onChange={(e)=> setFormTitle(e.target.value)
+                    }/>
+                  </div>
+
+                  <div className="form-group">
+                    <label> Company Name *</label>
+                    <input
+                    type="text"
+                    required
+                    placeholder='e.g. Acme group'
+                    value={formCompany}
+                    onChange={(e) => setFormCompany(e.target.value)} />
+                  </div>
+
+                  <div className="form-group">
+                      <label>Category</label>
+                      <select 
+                        value={formCategory}
+                        onChange={(e) => setFormCategory(e.target.value)}
+                      >
+                        <option value="Software Engineering">Software Engineering</option>
+                        <option value="Design">Design</option>
+                        <option value="Administrative">Administrative</option>
+                        <option value="Data Entry">Data Entry</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Location</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Remote (US/Canada)"
+                        value={formLocation}
+                        onChange={(e) => setFormLocation(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Salary (Range or Hourly)</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. $90k - $110k or $25/hr"
+                        value={formSalary}
+                        onChange={(e) => setFormSalary(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Recruiter Contact Email</label>
+                      <input 
+                        type="email" 
+                        placeholder="e.g. recruiting@acme.com"
+                        value={formRecruiter}
+                        onChange={(e) => setFormRecruiter(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group full-width">
+                      <label>Job Description URL (JD Link)</label>
+                      <input 
+                        type="url" 
+                        placeholder="e.g. https://company.com/careers/job-123"
+                        value={formJdUrl}
+                        onChange={(e) => setFormJdUrl(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="form-group full-width">
+                      <label>Job Description * (Paste full details to assess flags)</label>
+                      <textarea 
+                        required
+                        rows={6}
+                        placeholder="Paste requirements, description, interview channels, and equipment claims..."
+                        value={formDesc}
+                        onChange={(e) => setFormDesc(e.target.value)}
+                      />
+                    </div>
+                </div>
+
+                <button
+                type='submit'
+                className='recruiter-submit-btn'
+                disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                    <Loader className='spinner-icon' size={14}/>
+
+                    <span>Running AI Safety Vetting...</span>
+                    </>
+                  ) : (
+                    <>
+                    <Zap size={14} />
+                    <span> Submit & Analyze Listing</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* Right Pane: Active Vettings feed */}
+            <div className='recruiter-feed-panel glass'>
+              <div className='panel-header'>
+                <Shield className="panel-icon text-green" size={18}/>
+                <h4>Active Vetted Listings</h4>
+              </div>
+
+              <div className='recruiter-job-list'>
+                {jobs.length === 0 ? (
+                  <p className='no-jobs-text'>No active job listings found.</p>
+                ) : (
+                  jobs.map((job) => (
+                    <div
+                    key={job._id || job.id}
+                    className={`recruiter-job-card ${selectedJob?._id === job._id ? 'active' : ''} `}
+                    onClick={()=>setSelectedJob(job)}>
+                      <div className='card-top'>
+                        <h4>{job.title}</h4>
+                        <span className={`status-badge-small 
+                                          ${job.status==='Verified' ? 'status-high' : 
+                                          job.status === 'Suspicious' ? 'status-mid' : 
+                                          'status-low'}`}> {job.status} 
+                        </span>
+                      </div>
+                      
+                      <p className='company-text'>{job.company}</p>
+                      <div className='card-bottom'>
+                        <span className='score-badge'>Score: {job.trustScore}%</span>
+                        <span className='date-badge'>{new Date(job.postedDate).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  )) 
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+         </div> 
         )}
       </main>
 
-      {/* Post Job Modal */}
+      {/* Post Job Modal
       {showPostModal && (
         <div className="modal-backdrop">
           <div className="post-modal glass animate-fade-in">
@@ -271,7 +440,7 @@ function App() {
             </form>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Footer Vibe */}
       <footer className="app-footer">
@@ -596,6 +765,293 @@ function App() {
           }
           .form-group.full-width {
             grid-column: span 1;
+          }
+        }
+
+        /* Recruiter View Styles */
+        .recruiter-view {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+
+        .recruiter-grid {
+          display: grid;
+          grid-template-columns: 1.15fr 0.85fr;
+          gap: 2rem;
+          align-items: start;
+        }
+
+        .recruiter-form-panel, .recruiter-feed-panel {
+          padding: 1.5rem;
+          border-radius: var(--radius-md);
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+
+        .panel-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: white;
+          border-bottom: 1px solid var(--border-color);
+          padding-bottom: 0.75rem;
+        }
+
+        .panel-icon {
+          color: var(--primary-bright);
+        }
+
+        .panel-icon.text-green {
+          color: var(--score-high);
+        }
+
+        .panel-header h3, .panel-header h4 {
+          font-size: 1.15rem;
+          font-weight: 700;
+        }
+
+        .recruiter-form-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+          margin-bottom: 1.25rem;
+        }
+
+        .recruiter-submit-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          background: var(--primary);
+          color: white;
+          width: 100%;
+          padding: 0.75rem 1.5rem;
+          border-radius: var(--radius-sm);
+          font-weight: 600;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: background var(--transition-fast);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+        }
+
+        .recruiter-submit-btn:hover:not(:disabled) {
+          background: var(--primary-hover);
+        }
+
+        .recruiter-submit-btn:disabled {
+          background: var(--text-dark);
+          color: var(--text-muted);
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+
+        .recruiter-job-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          max-height: 580px;
+          overflow-y: auto;
+          padding-right: 0.5rem;
+        }
+
+        .recruiter-job-card {
+          background: rgba(0, 0, 0, 0.2);
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-sm);
+          padding: 1rem;
+          cursor: pointer;
+          transition: all var(--transition-fast);
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+          text-align: left;
+        }
+
+        .recruiter-job-card:hover {
+          background: rgba(255, 255, 255, 0.02);
+          border-color: var(--border-color-hover);
+          transform: translateY(-1px);
+        }
+
+        .recruiter-job-card.active {
+          border-color: var(--primary-bright);
+          background: rgba(99, 102, 241, 0.05);
+        }
+
+        .recruiter-job-card h4 {
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: white;
+        }
+
+        .card-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 1rem;
+        }
+
+        .company-text {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+        }
+
+        .card-bottom {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.75rem;
+          color: var(--text-dark);
+          margin-top: 0.25rem;
+        }
+
+        .score-badge {
+          font-weight: 600;
+          color: var(--text-muted);
+        }
+
+        .no-jobs-text {
+          color: var(--text-muted);
+          font-size: 0.85rem;
+          text-align: center;
+          padding: 2rem 0;
+        }
+
+        .recruiter-view {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+        .recruiter-grid {
+          display: grid;
+          grid-template-columns: 1.1fr 0.9fr;
+          gap: 2rem;
+          align-items: start;
+        }
+        .recruiter-form-panel, .recruiter-feed-panel {
+          padding: 1.5rem;
+          border-radius: var(--radius-md);
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+        .panel-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: white;
+          border-bottom: 1px solid var(--border-color);
+          padding-bottom: 0.75rem;
+        }
+        .panel-icon {
+          color: var(--primary-bright);
+        }
+        .panel-icon.text-green {
+          color: var(--score-high);
+        }
+        .panel-header h3 {
+          font-size: 1.15rem;
+          font-weight: 700;
+        }
+        .recruiter-form-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+          margin-bottom: 1.25rem;
+        }
+        .recruiter-submit-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          background: var(--primary);
+          color: white;
+          width: 100%;
+          padding: 0.75rem 1.5rem;
+          border-radius: var(--radius-sm);
+          font-weight: 600;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: background var(--transition-fast);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+        }
+        .recruiter-submit-btn:hover:not(:disabled) {
+          background: var(--primary-hover);
+        }
+        .recruiter-submit-btn:disabled {
+          background: var(--text-dark);
+          color: var(--text-muted);
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+        .recruiter-jobs-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          max-height: 580px;
+          overflow-y: auto;
+          padding-right: 0.5rem;
+        }
+        .recruiter-job-card {
+          background: rgba(0, 0, 0, 0.2);
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-sm);
+          padding: 1rem;
+          cursor: pointer;
+          transition: all var(--transition-fast);
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+          text-align: left;
+        }
+        .recruiter-job-card:hover {
+          background: rgba(255, 255, 255, 0.02);
+          border-color: var(--border-color-hover);
+          transform: translateY(-1px);
+        }
+        .recruiter-job-card.active {
+          border-color: var(--primary-bright);
+          background: rgba(99, 102, 241, 0.05);
+        }
+        .recruiter-job-card h4 {
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: white;
+        }
+        .card-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 1rem;
+        }
+        .company-text {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+        }
+        .card-bottom {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.75rem;
+          color: var(--text-dark);
+          margin-top: 0.25rem;
+        }
+        .score-badge {
+          font-weight: 600;
+          color: var(--text-muted);
+        }
+        .no-jobs-text {
+          color: var(--text-muted);
+          font-size: 0.85rem;
+          text-align: center;
+          padding: 2rem 0;
+        }
+
+        @media (max-width: 968px) {
+          .recruiter-grid {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>

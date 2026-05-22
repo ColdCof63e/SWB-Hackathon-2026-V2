@@ -27,6 +27,10 @@ export default function Navbar({ activeTab, setActiveTab }) {
         >
           AI Job Scanner
         </button>
+        <button className={`nav-btn ${activeTab === 'recruiter' ? 'active' : ''}`}
+        onClick={() => setActiveTab('recruiter')}>
+          Recruiter Console
+        </button>
       </div>
 
       <div className="nav-status">
