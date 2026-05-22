@@ -8,17 +8,16 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import mongoose from 'mongoose';
 import Job from './models/job.model.js';
 
-// Configure Environment
-dotenv.config();
-
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-
 // Resolve Paths (ES Modules helper)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DB_FILE = path.join(__dirname, 'data', 'jobs.json');
+
+// Configure Environment
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+const app = express();
+const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
