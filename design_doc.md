@@ -91,6 +91,26 @@ If the Gemini API key is suspended or fails, the local backend executes regex ch
 - **Free Recruiter Domain Check**: Flags standard recruiter contact points using `@gmail.com`, `@yahoo.com`, or `@outlook.com` instead of company domains.
 - **Compensation Discrepancies**: Checks for entry-level tasks offering inflated hourly wages (e.g. $45-$60/hr for Data Entry).
 
+### Scoring & Status Calculation
+The Heuristics Engine evaluates job listings starting from a baseline score of **100%**. Demerits are applied based on identified risk vectors:
+
+| Risk Vector | Deducted Points | Description |
+| :--- | :--- | :--- |
+| **Check Fraud / Equipment Deposit** | `-40` | Mentions of checks mailed for purchasing laptops/printers. |
+| **High-Risk Chat Redirection** | `-35` | Instructions to contact hiring managers on anonymous/encrypted apps like Telegram or Signal. |
+| **Email Spoofing Risk** | `-25` | Recruiter's enterprise email domain does not match the job posting host domain. |
+| **High Hourly Rates for Entry-Level** | `-20` | High hourly wages ($40-$60/hr) offered for administrative/data entry tasks. |
+| **Moderate-Risk Chat Redirection** | `-20` | Requests to use WhatsApp instead of official application channels. |
+| **Public Email Domain** | `-15` | Recruiter uses free public domains (Gmail, Yahoo, Outlook, Hotmail). |
+| **Insecure Interview Mode** | `-10` | No live video conferencing (Zoom, Google Meet, Teams) mentioned. |
+
+#### Limits & Status Verdicts:
+- **Min/Max Score**: Bounded between `10%` and `100%`.
+- **Status Verdict Thresholds**:
+  - **Score < 50%**: status = `Scam` (Dangerous, high risk of fraud).
+  - **Score 50% - 84%**: status = `Suspicious` (Caution advised, manual verification recommended).
+  - **Score >= 85%**: status = `Verified` (Lacks common remote job fraud indicators).
+
 ---
 
 ## 4. API Endpoints

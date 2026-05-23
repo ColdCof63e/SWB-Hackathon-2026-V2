@@ -76,5 +76,5 @@ npx playwright test tests/trustremote.spec.ts --ui
 ---
 
 ## 📖 Documentation
-For full architectural details, API design, scraping fallbacks, and security flows, check the design document:
-👉 **[design_doc.md](file:///e:/SWB%20Hackathon%20V2/design_doc.md)**
+- 👉 **[Design Document](file:///e:/SWB%20Hackathon%20V2/design_doc.md)**: Details the architectural components, URL scraping engine, safety vetting fallback algorithms, and API specifications.
+- 👉 **[Human-AI Interaction Guide](file:///e:/SWB%20Hackathon%20V2/human_loop_interaction.md)**: Documents the Human-in-the-Loop (HITL) and Human-on-the-Loop (HOTL) collaboration patterns utilized throughout this project's development.

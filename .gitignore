@@ -23,9 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
+# Ignore
 # environment variables
 .env
 .env.*
+
+# Tests
+/test-results
 
 # Playwright
 /test-results/
