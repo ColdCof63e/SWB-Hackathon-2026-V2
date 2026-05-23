@@ -164,8 +164,7 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
       }
       if (detectedPortal) {
         score += 10;
-        greenFlags.push(`The job posting URL contains
-          verification tracking from a trusted portal ${detectedPortal}.`);
+        greenFlags.push(`The job posting URL contains verification tracking from a trusted portal ${detectedPortal}.`);
       }
     } catch (e) {
       redFlags.push('Invalid Job Posting URL format provided');
