@@ -77,4 +77,4 @@ npx playwright test tests/trustremote.spec.ts --ui
 
 ## 📖 Documentation
 For full architectural details, API design, scraping fallbacks, and security flows, check the design document:
-👉 **[design_doc.md](file:///e:/SWB%20Hackathon%20V2/design_doc.md)**
+👉 **[design_doc.md](./design_doc.md)**
