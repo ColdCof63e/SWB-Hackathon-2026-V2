@@ -15,6 +15,11 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
 
+  // Auth State
+  const [passcode, setPasscode] = useState(localStorage.getItem('recruiterPasscode') || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('recruiterPasscode'));
+  const [loginInput, setLoginInput] = useState('');
+
   // Form Fields
   const [formTitle, setFormTitle] = useState('');
   const [formCompany, setFormCompany] = useState('');
@@ -55,7 +60,8 @@ function App() {
     fetch('/api/jobs', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${passcode}`
       },
       body: JSON.stringify({
         title: formTitle,
@@ -134,6 +140,24 @@ function App() {
       });
   };
 
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (loginInput.trim() === '') {
+      alert('Please enter a passcode.');
+      return;
+    }
+    setPasscode(loginInput);
+    setIsAuthenticated(true);
+    localStorage.setItem('recruiterPasscode', loginInput);
+  };
+
+  const handleLogout = () => {
+    setPasscode('');
+    setIsAuthenticated(false);
+    localStorage.removeItem('recruiterPasscode');
+    setLoginInput('');
+  };
+
 
   return (
     <div className="app-container">
@@ -194,16 +218,48 @@ function App() {
           </div>
         ) : (
           // Recruiter Console
-         <div className="recruiter-view animate-fade-in">
-          <header className='page-header'>
-            <h1>Recruiter Console</h1>
-            <p>Post new vacancies and analyze their Legitimacy
-              profiles. All listings undergo a security assessment
-               against scam indicators prior to indexing.
-            </p>
-          </header>
+          <div className="recruiter-view animate-fade-in">
+            {!isAuthenticated ? (
+              <div className="login-panel glass text-center animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '4rem auto', padding: '2.5rem', borderRadius: 'var(--radius-md)', maxWidth: '420px', gap: '1.25rem', width: '100%' }}>
+                <Shield className="panel-icon logo-large" size={48} style={{ color: 'var(--primary-bright)', marginBottom: '0.5rem' }} />
+                <h2>Recruiter Console Access</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center' }}>Please enter the authorization passcode to manage and post vetted jobs.</p>
+                <form onSubmit={handleLogin} className="login-form" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <input
+                    type="password"
+                    placeholder="Enter recruiter passcode..."
+                    value={loginInput}
+                    onChange={(e) => setLoginInput(e.target.value)}
+                    required
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.3)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.95rem',
+                      color: 'white',
+                      textAlign: 'center',
+                      outline: 'none'
+                    }}
+                  />
+                  <button type="submit" className="recruiter-submit-btn" style={{ margin: 0 }}>
+                    Unlock Console
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <>
+                <header className='page-header' style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <div>
+                    <h1>Recruiter Console</h1>
+                    <p>Post new vacancies and analyze their legitimacy profiles. All listings undergo a security assessment against scam indicators prior to indexing.</p>
+                  </div>
+                  <button onClick={handleLogout} className="modal-cancel-btn" style={{ height: 'fit-content', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#f43f5e', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    Lock Console
+                  </button>
+                </header>
 
-          <div className="recruiter-grid">
+                <div className="recruiter-grid">
             {/* Left Pane: Posting & Vetting form */}
             <div className="recruiter-form-panel glass">
               <div className="panel-header">
@@ -380,6 +436,8 @@ function App() {
             </div>
 
           </div>
+          </>
+          )}
          </div> 
         )}
       </main>

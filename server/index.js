@@ -274,6 +274,22 @@ app.get('/api/jobs', async (req, res) => {
 
 // 2. POST /api/jobs - Submit a new job to the board (auto-vets with AI)
 app.post('/api/jobs', async (req, res) => {
+
+  // Authorization check
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer')) {
+    return res.status(401).json({error: 'Unauthorized: Missing or malformed authorization header.'})
+  }
+
+  // Extracting passcode here
+  const passcode = authHeader.split(' ')[1]
+
+  // Validating agains server side .env variables
+  if (passcode !== process.env.RECRUITER_PASSCODE) {
+    return res.status(401).json({error: 'Unauthorized: Invalid recruiter authentication passcode.'})
+  }
+
   const { title, company, location, salary, category, description, recruiterInfo, jdUrl } = req.body;
 
   if (!title || !company || !description) {

@@ -96,6 +96,8 @@ test.describe('TrustRemote End-to-End Tests', () => {
 
     // 2. Navigate to Recruiter Console
     await page.click('button:has-text("Recruiter Console")');
+    await page.fill('input[placeholder="Enter recruiter passcode..."]', 'hackathon2026secret');
+    await page.click('button:has-text("Unlock Console")');
     await expect(page.locator('.panel-header h4').first()).toContainText('Post & AI-Vet a New Job');
 
     // 3. Fill out the posting form
@@ -151,6 +153,8 @@ test.describe('TrustRemote End-to-End Tests', () => {
   test('Negative: Prevent posting if required fields are missing', async ({ page }) => {
     // 1. Navigate to Recruiter Console
     await page.click('button:has-text("Recruiter Console")');
+    await page.fill('input[placeholder="Enter recruiter passcode..."]', 'hackathon2026secret');
+    await page.click('button:has-text("Unlock Console")');
 
     // 2. Leave "Job Title" empty but fill Company
     await page.fill('input[placeholder="e.g. Acme group"]', 'Acme Empty Title');
