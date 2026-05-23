@@ -57,6 +57,36 @@ test.describe('TrustRemote End-to-End Tests', () => {
     expect(scoreValue).toBeGreaterThanOrEqual(80);
   });
 
+  test('Positive: Interactive Scanner can fetch details from a URL and analyze it', async ({ page }) => {
+    // Dismiss the success alert dialog
+    page.on('dialog', async (dialog) => {
+      await dialog.accept();
+    });
+
+    // 1. Navigate to AI Job Scanner tab
+    await page.click('button:has-text("AI Job Scanner")');
+
+    // 2. Fill in the job URL
+    await page.fill('input[placeholder*="company.com/careers/job-123"]', 
+      'https://ats.rippling.com/analyticsmart/jobs/9b968983-2c3e-42eb-aa00-db788cdb0d21?jobSite=LinkedIn'
+    );
+
+    // 3. Click "Fetch Details"
+    await page.click('button:has-text("Fetch Details")');
+
+    // 4. Verify that description gets autofilled
+    const descriptionTextarea = page.locator('textarea.scan-textarea');
+    await expect(descriptionTextarea).not.toBeEmpty();
+    await expect(descriptionTextarea).toContainText('Full Stack Developer');
+
+    // 5. Trigger Scan
+    await page.click('button:has-text("Analyze Job Legitimacy")');
+
+    // 6. Expect results
+    const report = page.locator('.scan-report');
+    await expect(report).toBeVisible();
+  });
+
   test('Positive: Recruiter Console can submit and index a job', async ({ page }) => {
     // 1. Listen for browser alert popups
     page.on('dialog', async (dialog) => {

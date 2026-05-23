@@ -8,6 +8,7 @@ export default function JobScanner() {
   const [scanResult, setScanResult] = useState(null);
   const [scanningStep, setScanningStep] = useState('');
   const [jdUrl, setJdUrl] = useState("");
+  const [isScraping, setIsScraping] = useState(false);
 
   // Quick Preset Samples for Testing/Demoing
   const loadPreset = (type) => {
@@ -44,6 +45,41 @@ export default function JobScanner() {
       );
       setRecruiterInfo('hiring@quantumscale.io');
     }
+  };
+
+  const handleScrapeUrl = () => {
+    if (!jdUrl.trim()) {
+      alert('Please enter a Job Posting URL first.');
+      return;
+    }
+    setIsScraping(true);
+    fetch('/api/scrape', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url: jdUrl })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Scrape request failed');
+        return res.json();
+      })
+      .then(data => {
+        if (data.description) {
+          setDescription(data.description);
+        }
+        if (data.recruiterInfo) {
+          setRecruiterInfo(data.recruiterInfo);
+        }
+        alert('Job details successfully retrieved and populated!');
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Failed to retrieve job details from this URL. Please verify the URL or paste the description manually.');
+      })
+      .finally(() => {
+        setIsScraping(false);
+      });
   };
 
   const handleScan = () => {
@@ -227,14 +263,38 @@ export default function JobScanner() {
           </p>
 
           <div className="input-row">
-            <div className="input-group">
+            <div className="input-group" style={{ width: '100%' }}>
               <label className='input-label'>Job Posting URL (Optional)</label>
-              <input
-              type='url'
-              className='scan-input'
-              placeholder='e.g., https://company.com/careers/job-123'
-              value={jdUrl}
-              onChange={(e) => setJdUrl(e.target.value)}/>
+              <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                <input
+                  type='url'
+                  className='scan-input'
+                  style={{ flexGrow: 1 }}
+                  placeholder='e.g., https://company.com/careers/job-123'
+                  value={jdUrl}
+                  onChange={(e) => setJdUrl(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="preset-btn"
+                  style={{
+                    padding: '0 1rem',
+                    margin: 0,
+                    whiteSpace: 'nowrap',
+                    background: isScraping ? 'rgba(255,255,255,0.05)' : 'rgba(99, 102, 241, 0.15)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    color: 'var(--primary-bright)',
+                    cursor: isScraping ? 'not-allowed' : 'pointer',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.8rem',
+                    fontWeight: 600
+                  }}
+                  onClick={handleScrapeUrl}
+                  disabled={isScraping}
+                >
+                  {isScraping ? 'Fetching...' : 'Fetch Details'}
+                </button>
+              </div>
             </div>
           </div>
 

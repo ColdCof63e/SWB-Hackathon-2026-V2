@@ -13,6 +13,7 @@ function App() {
   const [selectedJob, setSelectedJob] = useState(mockJobs[0]);
   const [showPostModal, setShowPostModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScraping, setIsScraping] = useState(false);
 
   // Form Fields
   const [formTitle, setFormTitle] = useState('');
@@ -96,6 +97,43 @@ function App() {
         setIsSubmitting(false);
       });
   };
+
+  const handleAutofillFromUrl = () => {
+    if (!formJdUrl.trim()) {
+      alert('Please enter a Job Description URL (JD Link) first.');
+      return;
+    }
+    setIsScraping(true);
+    fetch('/api/scrape', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url: formJdUrl })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Scrape request failed');
+        return res.json();
+      })
+      .then(data => {
+        if (data.title) setFormTitle(data.title);
+        if (data.company) setFormCompany(data.company);
+        if (data.location) setFormLocation(data.location);
+        if (data.salary) setFormSalary(data.salary);
+        if (data.category) setFormCategory(data.category);
+        if (data.description) setFormDesc(data.description);
+        if (data.recruiterInfo) setFormRecruiter(data.recruiterInfo);
+        alert('Job details successfully retrieved and autofilled!');
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Failed to autofill job details. Please check the URL or fill in details manually.');
+      })
+      .finally(() => {
+        setIsScraping(false);
+      });
+  };
+
 
   return (
     <div className="app-container">
@@ -240,12 +278,35 @@ function App() {
                     </div>
                     <div className="form-group full-width">
                       <label>Job Description URL (JD Link)</label>
-                      <input 
-                        type="url" 
-                        placeholder="e.g. https://company.com/careers/job-123"
-                        value={formJdUrl}
-                        onChange={(e) => setFormJdUrl(e.target.value)}
-                      />
+                      <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                        <input 
+                          type="url" 
+                          style={{ flexGrow: 1 }}
+                          placeholder="e.g. https://company.com/careers/job-123"
+                          value={formJdUrl}
+                          onChange={(e) => setFormJdUrl(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="preset-btn"
+                          style={{
+                            padding: '0 1rem',
+                            margin: 0,
+                            whiteSpace: 'nowrap',
+                            background: isScraping ? 'rgba(255,255,255,0.05)' : 'rgba(99, 102, 241, 0.15)',
+                            border: '1px solid rgba(99, 102, 241, 0.3)',
+                            color: 'var(--primary-bright)',
+                            cursor: isScraping ? 'not-allowed' : 'pointer',
+                            borderRadius: 'var(--radius-sm)',
+                            fontSize: '0.8rem',
+                            fontWeight: 600
+                          }}
+                          onClick={handleAutofillFromUrl}
+                          disabled={isScraping}
+                        >
+                          {isScraping ? 'Fetching...' : 'Autofill from URL'}
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="form-group full-width">

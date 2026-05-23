@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import mongoose from 'mongoose';
 import Job from './models/job.model.js';
+import { scrapeAndParseJob } from './scraper.js';
 
 // Resolve Paths (ES Modules helper)
 const __filename = fileURLToPath(import.meta.url);
@@ -329,7 +330,20 @@ app.post('/api/jobs', async (req, res) => {
 
 // 3. POST /api/scan - Dynamic parser for description text
 app.post('/api/scan', async (req, res) => {
-  const { description, recruiterInfo, jdUrl } = req.body;
+  let { description, recruiterInfo, jdUrl } = req.body;
+
+  if (!description && jdUrl) {
+    try {
+      console.log(`Auto-scraping description from URL: ${jdUrl}`);
+      const scraped = await scrapeAndParseJob(jdUrl, genAI);
+      description = scraped.description;
+      if (!recruiterInfo && scraped.recruiterInfo) {
+        recruiterInfo = scraped.recruiterInfo;
+      }
+    } catch (scrapeErr) {
+      console.error('Auto-scraping failed:', scrapeErr.message);
+    }
+  }
 
   if (!description) {
     return res.status(400).json({ error: 'Description text is required.' });
@@ -354,6 +368,22 @@ app.post('/api/scan', async (req, res) => {
   } catch (error) {
     console.error('General scanner execution error:', error);
     res.status(500).json({ error: 'Failed to complete job safety scan.' });
+  }
+});
+
+// 4. POST /api/scrape - Fetch and parse job details from a URL
+app.post('/api/scrape', async (req, res) => {
+  const { url } = req.body;
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required.' });
+  }
+
+  try {
+    const jobData = await scrapeAndParseJob(url, genAI);
+    res.json(jobData);
+  } catch (error) {
+    console.error('Failed to scrape job URL:', error.message);
+    res.status(500).json({ error: `Scraping failed: ${error.message}` });
   }
 });
 
