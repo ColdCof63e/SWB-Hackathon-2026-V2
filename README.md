@@ -1,6 +1,7 @@
 # TrustRemote - Remote Job Legitimacy Vetting Portal
 
 ## 📖 Documentation
+
 For full architectural details, API design, scraping fallbacks, and security flows, check the design document:
 👉 **[design_doc.md](./design_doc.md)**
 For Human Loop Interaction details **[human_loop_interaction.md](./human_loop_interaction.md)**
