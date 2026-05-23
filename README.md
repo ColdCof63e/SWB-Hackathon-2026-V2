@@ -1,5 +1,10 @@
 # TrustRemote - Remote Job Legitimacy Vetting Portal
 
+## 📖 Documentation
+For full architectural details, API design, scraping fallbacks, and security flows, check the design document:
+👉 **[design_doc.md](./design_doc.md)**
+For Human Loop Interaction details **[human_loop_interaction.md](./human_loop_interaction.md)**
+
 TrustRemote is an E2E Remote Job Board and Real-Time Legitimacy Scanner designed to protect remote jobseekers from financial, phishing, and data-harvesting scams. 
 
 The application utilizes the **Google Gemini API** (with a robust rule-based local heuristics fallback) to analyze job descriptions, recruiter contacts, and external job post URLs.
@@ -74,7 +79,3 @@ npx playwright test tests/trustremote.spec.ts --ui
 ```
 
 ---
-
-## 📖 Documentation
-For full architectural details, API design, scraping fallbacks, and security flows, check the design document:
-👉 **[design_doc.md](./design_doc.md)**
