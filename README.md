@@ -4,7 +4,9 @@
 
 For full architectural details, API design, scraping fallbacks, and security flows, check the design document:
 👉 **[design_doc.md](./design_doc.md)**
-For Human Loop Interaction details **[human_loop_interaction.md](./human_loop_interaction.md)**
+
+For Human Loop Interaction details:
+**[human_loop_interaction.md](./human_loop_interaction.md)**
 ---
 TrustRemote is an E2E Remote Job Board and Real-Time Legitimacy Scanner designed to protect remote jobseekers from financial, phishing, and data-harvesting scams. 
 
