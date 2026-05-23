@@ -14,6 +14,7 @@ function App() {
   const [showPostModal, setShowPostModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
+  const [scrapingStep, setScrapingStep] = useState('');
 
   // Auth State
   const [passcode, setPasscode] = useState(localStorage.getItem('recruiterPasscode') || '');
@@ -110,6 +111,19 @@ function App() {
       return;
     }
     setIsScraping(true);
+    setScrapingStep('Connecting...');
+
+    const steps = ['Connecting...', 'Fetching...', 'Parsing...', 'Extracting...'];
+    let stepIndex = 0;
+    const interval = setInterval(() => {
+      stepIndex++;
+      if (stepIndex < steps.length) {
+        setScrapingStep(steps[stepIndex]);
+      } else {
+        clearInterval(interval);
+      }
+    }, 200);
+
     fetch('/api/scrape', {
       method: 'POST',
       headers: {
@@ -122,20 +136,23 @@ function App() {
         return res.json();
       })
       .then(data => {
-        if (data.title) setFormTitle(data.title);
-        if (data.company) setFormCompany(data.company);
-        if (data.location) setFormLocation(data.location);
-        if (data.salary) setFormSalary(data.salary);
-        if (data.category) setFormCategory(data.category);
-        if (data.description) setFormDesc(data.description);
-        if (data.recruiterInfo) setFormRecruiter(data.recruiterInfo);
-        alert('Job details successfully retrieved and autofilled!');
+        setTimeout(() => {
+          clearInterval(interval);
+          if (data.title) setFormTitle(data.title);
+          if (data.company) setFormCompany(data.company);
+          if (data.location) setFormLocation(data.location);
+          if (data.salary) setFormSalary(data.salary);
+          if (data.category) setFormCategory(data.category);
+          if (data.description) setFormDesc(data.description);
+          if (data.recruiterInfo) setFormRecruiter(data.recruiterInfo);
+          alert('Job details successfully retrieved and autofilled!');
+          setIsScraping(false);
+        }, 800);
       })
       .catch(err => {
+        clearInterval(interval);
         console.error(err);
         alert('Failed to autofill job details. Please check the URL or fill in details manually.');
-      })
-      .finally(() => {
         setIsScraping(false);
       });
   };
@@ -360,7 +377,7 @@ function App() {
                           onClick={handleAutofillFromUrl}
                           disabled={isScraping}
                         >
-                          {isScraping ? 'Fetching...' : 'Autofill from URL'}
+                          {isScraping ? (scrapingStep || 'Fetching...') : 'Autofill from URL'}
                         </button>
                       </div>
                     </div>

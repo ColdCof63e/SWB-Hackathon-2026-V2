@@ -97,6 +97,16 @@ export default function JobInspector({ job, onClose }) {
               </div>
               <div className="audit-item-value">{aiDetails.marketMatch}</div>
             </div>
+
+            <div className="audit-item text-long">
+              <div className="audit-item-label">
+                <Compass size={14} className="audit-icon" />
+                <span>Cross-Portal Footprint</span>
+              </div>
+              <div className="audit-item-value">
+                {aiDetails.metrics?.crossPortalIndex || aiDetails.crossPortalIndex || 'None Detected'}
+              </div>
+            </div>
           </div>
         </div>
 

@@ -85,6 +85,11 @@ test.describe('TrustRemote End-to-End Tests', () => {
     // 6. Expect results
     const report = page.locator('.scan-report');
     await expect(report).toBeVisible();
+
+    // 7. Verify Cross-Portal Footprint metric is displayed
+    const crossPortalMetric = page.locator('.metric-box', { hasText: 'Cross-Portal Footprint' });
+    await expect(crossPortalMetric).toBeVisible();
+    await expect(crossPortalMetric).toContainText('LinkedIn, Rippling ATS');
   });
 
   test('Positive: Recruiter Console can submit and index a job', async ({ page }) => {

@@ -49,8 +49,8 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
   let equipmentPolicy = 'Not specified';
   let marketMatch = 'Aligned';
   let jdDomain = '';
-
-
+  let detectedATS = '';
+  let detectedPortal = '';
   // 1. Recruiter Email check
   if (recruiterInfo) {
     if (contactLower.includes('gmail.com') || contactLower.includes('yahoo.com') || contactLower.includes('outlook.com') || contactLower.includes('hotmail.com')) {
@@ -111,8 +111,22 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
   if (jdUrl) {
     try {
       const urlObj = new URL(jdUrl);
-      jdDomain = urlObj.hostname.replace('www.', '');
-      greenFlags.push(`Job Description hosted on verified domain: ${jdDomain}`);
+      jdDomain = urlObj.hostname.toLowerCase().replace('www.', '');
+      const trustedDomains = {'rippling.com': 'Rippling ATS', 
+                              'greenhouse.io': 'Greenhouse', 
+                              'lever.co': 'Lever ATS', 
+                              'workday.com': 'Workday ATS'};
+
+      for(const[host, displayName] of Object.entries(trustedDomains)) {
+        if(jdDomain === host || jdDomain.endsWith('.'+host)) {
+          detectedATS = displayName;
+          break;
+        }
+      }
+      if (detectedATS) {
+        score += 10;
+        greenFlags.push(`Job Description hosted on a verified ${detectedATS} domain.`);
+      }
     } catch (e) {
       redFlags.push('Invalid Job Posting URL format provided');
     }
@@ -133,6 +147,31 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
     }
   }
 
+  // 8. Cross-portal consistency
+  if (jdUrl) {
+    try {
+      const urlObj = new URL(jdUrl);
+      const queryPortals = {'linkedin': 'LinkedIn', 
+                          'indeed': 'Indeed', 
+                          'glassdoor': 'Glassdoor'};
+      const jobSiteVal = urlObj.searchParams.get('jobSite');
+      const utmSourceVal = urlObj.searchParams.get('utm_source');
+
+      if(jobSiteVal && queryPortals[jobSiteVal.toLowerCase()]) {
+        detectedPortal = queryPortals[jobSiteVal.toLowerCase()];
+      } else if (utmSourceVal && queryPortals[utmSourceVal.toLowerCase()]) {
+        detectedPortal = queryPortals[utmSourceVal.toLowerCase()]
+      }
+      if (detectedPortal) {
+        score += 10;
+        greenFlags.push(`The job posting URL contains
+          verification tracking from a trusted portal ${detectedPortal}.`);
+      }
+    } catch (e) {
+      redFlags.push('Invalid Job Posting URL format provided');
+    }
+  }
+
   // Bound Score
   score = Math.max(10, Math.min(100, score));
 
@@ -150,6 +189,13 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
     domainAge = '3 years (Verified Resolve)';
   }
 
+  const crossPortalParts = [];
+  if (detectedPortal)
+    crossPortalParts.push(detectedPortal);
+  if (detectedATS)
+    crossPortalParts.push(detectedATS);
+  const crossPortalIndex = crossPortalParts.length > 0 ? crossPortalParts.join(', ') : 'None Detected';
+
   return {
     trustScore: score,
     status,
@@ -161,7 +207,8 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
       recruiterEmailStatus,
       interviewChannel,
       equipmentPolicy,
-      marketMatch
+      marketMatch,
+      crossPortalIndex
     }
   };
 }

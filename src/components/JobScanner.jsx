@@ -9,6 +9,7 @@ export default function JobScanner() {
   const [scanningStep, setScanningStep] = useState('');
   const [jdUrl, setJdUrl] = useState("");
   const [isScraping, setIsScraping] = useState(false);
+  const [scrapingStep, setScrapingStep] = useState('');
 
   // Quick Preset Samples for Testing/Demoing
   const loadPreset = (type) => {
@@ -53,6 +54,19 @@ export default function JobScanner() {
       return;
     }
     setIsScraping(true);
+    setScrapingStep('Connecting...');
+
+    const steps = ['Connecting...', 'Fetching...', 'Parsing...', 'Extracting...'];
+    let stepIndex = 0;
+    const interval = setInterval(() => {
+      stepIndex++;
+      if (stepIndex < steps.length) {
+        setScrapingStep(steps[stepIndex]);
+      } else {
+        clearInterval(interval);
+      }
+    }, 200);
+
     fetch('/api/scrape', {
       method: 'POST',
       headers: {
@@ -65,19 +79,22 @@ export default function JobScanner() {
         return res.json();
       })
       .then(data => {
-        if (data.description) {
-          setDescription(data.description);
-        }
-        if (data.recruiterInfo) {
-          setRecruiterInfo(data.recruiterInfo);
-        }
-        alert('Job details successfully retrieved and populated!');
+        setTimeout(() => {
+          clearInterval(interval);
+          if (data.description) {
+            setDescription(data.description);
+          }
+          if (data.recruiterInfo) {
+            setRecruiterInfo(data.recruiterInfo);
+          }
+          alert('Job details successfully retrieved and populated!');
+          setIsScraping(false);
+        }, 800);
       })
       .catch(err => {
+        clearInterval(interval);
         console.error(err);
         alert('Failed to retrieve job details from this URL. Please verify the URL or paste the description manually.');
-      })
-      .finally(() => {
         setIsScraping(false);
       });
   };
@@ -223,6 +240,54 @@ export default function JobScanner() {
       domainAge = '3 years (Verified Resolve)';
     }
 
+    let detectedATS = '';
+    let detectedPortal = '';
+    let jdDomain = '';
+
+    if (jdUrl) {
+      try {
+        const urlObj = new URL(jdUrl);
+        const hostname = urlObj.hostname.toLowerCase();
+        jdDomain = hostname.replace('www.', '');
+
+        const atsMapping = {
+          'rippling.com': 'Rippling ATS',
+          'greenhouse.io': 'Greenhouse ATS',
+          'lever.co': 'Lever ATS',
+          'workday.com': 'Workday ATS'
+        };
+
+        for (const [host, displayName] of Object.entries(atsMapping)) {
+          if (jdDomain === host || jdDomain.endsWith('.' + host)) {
+            detectedATS = displayName;
+            break;
+          }
+        }
+
+        const queryPortals = {
+          'linkedin': 'LinkedIn',
+          'indeed': 'Indeed',
+          'glassdoor': 'Glassdoor'
+        };
+
+        const jobSiteVal = urlObj.searchParams.get('jobSite');
+        const utmSourceVal = urlObj.searchParams.get('utm_source');
+
+        if (jobSiteVal && queryPortals[jobSiteVal.toLowerCase()]) {
+          detectedPortal = queryPortals[jobSiteVal.toLowerCase()];
+        } else if (utmSourceVal && queryPortals[utmSourceVal.toLowerCase()]) {
+          detectedPortal = queryPortals[utmSourceVal.toLowerCase()];
+        }
+      } catch (e) {
+        // invalid URL
+      }
+    }
+
+    const crossPortalParts = [];
+    if (detectedPortal) crossPortalParts.push(detectedPortal);
+    if (detectedATS) crossPortalParts.push(detectedATS);
+    const crossPortalIndex = crossPortalParts.length > 0 ? crossPortalParts.join(', ') : 'None Detected';
+
     setScanResult({
       trustScore: score,
       score,
@@ -235,7 +300,8 @@ export default function JobScanner() {
         recruiterEmailStatus,
         interviewChannel,
         equipmentPolicy,
-        marketMatch
+        marketMatch,
+        crossPortalIndex
       }
     });
     setIsScanning(false);
@@ -292,7 +358,7 @@ export default function JobScanner() {
                   onClick={handleScrapeUrl}
                   disabled={isScraping}
                 >
-                  {isScraping ? 'Fetching...' : 'Fetch Details'}
+                  {isScraping ? (scrapingStep || 'Fetching...') : 'Fetch Details'}
                 </button>
               </div>
             </div>
@@ -404,6 +470,10 @@ export default function JobScanner() {
                 <div className="metric-box">
                   <span className="box-lbl">Salary Market Check</span>
                   <span className="box-val">{scanResult.metrics.marketMatch}</span>
+                </div>
+                <div className="metric-box text-long">
+                  <span className="box-lbl">Cross-Portal Footprint</span>
+                  <span className="box-val">{scanResult.metrics.crossPortalIndex || 'None Detected'}</span>
                 </div>
               </div>
 
@@ -820,6 +890,10 @@ export default function JobScanner() {
           border: 1px solid rgba(255,255,255,0.03);
           padding: 0.5rem 0.75rem;
           border-radius: var(--radius-sm);
+        }
+
+        .metric-box.text-long {
+          grid-column: span 2;
         }
 
         .box-lbl {
