@@ -31,6 +31,14 @@ dist-ssr
 # Tests
 /test-results
 
+# Ignore all md files
+*.md
+
+# Except these files not to be ignored
+!design_doc.md
+!human_loop_interaction.md
+!readme.md
+
 # Playwright
 /test-results/
 /playwright-report/
