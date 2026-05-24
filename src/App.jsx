@@ -8,7 +8,7 @@ import { mockJobs } from './data/mockJobs';
 import { Shield, CheckCircle, Zap, Plus, X, Loader } from 'lucide-react';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('board'); // 'board' or 'scanner'
+  const [activeTab, setActiveTab] = useState('scanner'); // 'board', 'scanner', or 'recruiter'
   const [jobs, setJobs] = useState(mockJobs); // initialize with static mock data
   const [selectedJob, setSelectedJob] = useState(mockJobs[0]);
   const [showPostModal, setShowPostModal] = useState(false);
@@ -192,11 +192,6 @@ function App() {
                 Browse verified remote opportunities vetted by our automated fraud intelligence. 
                 Filter by score or keywords to avoid hiring scams and low-quality listings.
               </p>
-              
-              {/* <button className="post-job-trigger" onClick={() => setShowPostModal(true)}>
-                <Plus size={16} />
-                <span>Post & AI-Vet Job</span>
-              </button> */}
             </header>
 
             {/* Statistics Dashboard */}
@@ -458,125 +453,6 @@ function App() {
          </div> 
         )}
       </main>
-
-      {/* Post Job Modal
-      {showPostModal && (
-        <div className="modal-backdrop">
-          <div className="post-modal glass animate-fade-in">
-            <div className="modal-header">
-              <div className="modal-title-wrapper">
-                <Shield className="shield-modal" size={18} />
-                <h3>Post Job & Run AI Vetting</h3>
-              </div>
-              <button className="modal-close" onClick={() => setShowPostModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handlePostJob} className="modal-form">
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Job Title *</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="e.g. Senior React Developer"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Company Name *</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="e.g. Acme Corp"
-                    value={formCompany}
-                    onChange={(e) => setFormCompany(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Category</label>
-                  <select 
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value)}
-                  >
-                    <option value="Software Engineering">Software Engineering</option>
-                    <option value="Design">Design</option>
-                    <option value="Administrative">Administrative</option>
-                    <option value="Data Entry">Data Entry</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Location</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Remote (US/Canada)"
-                    value={formLocation}
-                    onChange={(e) => setFormLocation(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Salary (Range or hourly rate)</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. $90k - $110k or $25/hr"
-                    value={formSalary}
-                    onChange={(e) => setFormSalary(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Recruiter Contact Email</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. recruiting@acme.com"
-                    value={formRecruiter}
-                    onChange={(e) => setFormRecruiter(e.target.value)}
-                  />
-                </div>
-                <div className="form-group full-width">
-                  <label>Job Description * (Paste full details to assess flags)</label>
-                  <textarea 
-                    required
-                    rows={6}
-                    placeholder="Paste requirements, description, interview channels, and equipment claims..."
-                    value={formDesc}
-                    onChange={(e) => setFormDesc(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-actions">
-                <button 
-                  type="button" 
-                  className="modal-cancel-btn"
-                  onClick={() => setShowPostModal(false)}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="modal-submit-btn"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader className="spinner-icon" size={14} />
-                      <span>Scanning Posting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Zap size={14} />
-                      <span>Post and Analyze Listing</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )} */}
 
       {/* Footer Vibe */}
       <footer className="app-footer">

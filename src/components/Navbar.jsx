@@ -16,16 +16,16 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
       <div className="nav-links">
         <button 
-          className={`nav-btn ${activeTab === 'board' ? 'active' : ''}`}
-          onClick={() => setActiveTab('board')}
-        >
-          Jobs Board
-        </button>
-        <button 
           className={`nav-btn ${activeTab === 'scanner' ? 'active' : ''}`}
           onClick={() => setActiveTab('scanner')}
         >
           AI Job Scanner
+        </button>
+        <button 
+          className={`nav-btn ${activeTab === 'board' ? 'active' : ''}`}
+          onClick={() => setActiveTab('board')}
+        >
+          Jobs Board
         </button>
         <button className={`nav-btn ${activeTab === 'recruiter' ? 'active' : ''}`}
         onClick={() => setActiveTab('recruiter')}>

@@ -15,10 +15,13 @@ test.describe('TrustRemote End-to-End Tests', () => {
   // ==========================================
 
   test('Positive: Job Feed loads and Inspector displays job details', async ({ page }) => {
-    // 1. Verify page title or header
+    // 1. Navigate to Jobs Board since scanner is now default
+    await page.click('button:has-text("Jobs Board")');
+
+    // 2. Verify page title or header
     await expect(page.locator('.page-header h1')).toContainText('Remote Job Legitimacy Feed');
 
-    // 2. Wait for jobs to fetch and render
+    // 3. Wait for jobs to fetch and render
     const firstJobCard = page.locator('.job-card').first();
     await expect(firstJobCard).toBeVisible();
 
@@ -171,6 +174,66 @@ test.describe('TrustRemote End-to-End Tests', () => {
 
     // 4. Verify that the form is not submitted (i.e. we are not in loading/submitting state)
     await expect(submitBtn).not.toContainText('Running AI Safety Vetting');
+  });
+
+  test('Negative: Scanner detects non-remote role and displays warning card', async ({ page }) => {
+    // 1. Navigate to AI Job Scanner tab
+    await page.click('button:has-text("AI Job Scanner")');
+
+    // 2. Fill in hybrid/onsite job details (not remote)
+    await page.fill('textarea.scan-textarea', 
+      'We are looking for a Senior Software Engineer to work at our HQ in San Francisco. This is a Hybrid role requiring 3 days a week in-office. We offer standard benefits.'
+    );
+
+    // 3. Trigger Scan
+    await page.click('button:has-text("Analyze Job Legitimacy")');
+
+    // 4. Expect report to be visible
+    const report = page.locator('.scan-report');
+    await expect(report).toBeVisible();
+
+    // 5. Verify the non-remote warning alert banner is displayed
+    const warningBanner = page.locator('.remote-alert-banner');
+    await expect(warningBanner).toBeVisible();
+    await expect(warningBanner).toContainText('Non-Remote Role Alert');
+  });
+
+  test('Negative: Recruiter Console submits a hybrid job and Inspector flags it', async ({ page }) => {
+    // 1. Listen for browser alert popups
+    page.on('dialog', async (dialog) => {
+      await dialog.accept();
+    });
+
+    // 2. Navigate to Recruiter Console
+    await page.click('button:has-text("Recruiter Console")');
+    await page.fill('input[placeholder="Enter recruiter passcode..."]', 'hackathon2026secret');
+    await page.click('button:has-text("Unlock Console")');
+    await expect(page.locator('.panel-header h4').first()).toContainText('Post & AI-Vet a New Job');
+
+    // 3. Fill out the posting form with a hybrid job
+    await page.fill('input[placeholder="e.g. Senior Test Engieer"]', 'Hybrid Product Manager');
+    await page.fill('input[placeholder="e.g. Acme group"]', 'Hybrid Corp');
+    await page.fill('input[placeholder*="e.g. Remote"]', 'San Francisco, CA (Hybrid)');
+    await page.fill('input[placeholder*="e.g. $90k"]', '$140,000/yr');
+    await page.fill('textarea[placeholder*="Paste requirements"]', 
+      'This is a Hybrid role requiring 3 days a week onsite at our San Francisco office. You will manage our analytics products.'
+    );
+
+    // 4. Submit Job
+    await page.click('button:has-text("Submit & Analyze Listing")');
+
+    // 5. Navigate to Jobs Board to view it
+    await page.click('button:has-text("Jobs Board")');
+
+    // 6. Click the newly added job card
+    const jobCard = page.locator('.job-card', { hasText: 'Hybrid Product Manager' }).first();
+    await expect(jobCard).toBeVisible();
+    await jobCard.click();
+
+    // 7. Verify the Inspector shows the non-remote alert banner
+    const warningBanner = page.locator('.job-inspector .remote-alert-banner');
+    await expect(warningBanner).toBeVisible();
+    await expect(warningBanner).toContainText('Non-Remote Role Alert');
   });
 
 });

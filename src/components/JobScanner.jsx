@@ -153,6 +153,38 @@ export default function JobScanner() {
   };
 
   const performAnalysis = () => {
+    const checkIsRemote = (url = '', desc = '') => {
+      const text = `${url} ${desc}`.toLowerCase()
+      const nonRemoteKeywords = [
+        'onsite', 
+        'on-site', 
+        'hybrid', 
+        'in-office', 
+        'in office',
+        'in-person work',
+        'in-person required',
+        'in-person role',
+        'work in-person',
+        'work in person',
+        'commute to', 
+        'relocate to'
+      ]
+
+      const hasNonRemoteTerms = nonRemoteKeywords.some(keyword => text.includes(keyword))
+
+      const hasRemoteTerms = text.includes('remote') ||
+      text.includes('remote-first') ||
+      text.includes('work from anywhere') ||
+      text.includes('work from home') ||
+      text.includes('wfh')
+
+      if(hasNonRemoteTerms) return false
+
+      return hasRemoteTerms || url.toLocaleLowerCase().includes('remote')
+    }
+
+    const isRemote = checkIsRemote(jdUrl, description)
+
     const descLower = description.toLowerCase();
     const contactLower = recruiterInfo.toLowerCase();
 
@@ -292,6 +324,7 @@ export default function JobScanner() {
       trustScore: score,
       score,
       status,
+      isRemote,
       overallVerdict,
       redFlags,
       greenFlags,
@@ -330,9 +363,10 @@ export default function JobScanner() {
 
           <div className="input-row">
             <div className="input-group" style={{ width: '100%' }}>
-              <label className='input-label'>Job Posting URL (Optional)</label>
+              <label className='input-label'>Job Posting URL</label>
               <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
                 <input
+                  required
                   type='url'
                   className='scan-input'
                   style={{ flexGrow: 1 }}
@@ -433,6 +467,17 @@ export default function JobScanner() {
                 </span>
               </div>
 
+              {/* Warning for Non-remote jobs */}
+              {scanResult.isRemote === false && (
+                <div className='remote-alert-banner animate-fade-in'>
+                  <AlertTriangle size={18}/>
+                  <div>
+                    <strong>Non-Remote Role Alert</strong>
+                    <p>This job listing is flagged as On-site or Hybrid. TrustRemote is optimized for remote role verification only.</p>
+                  </div>
+                </div>
+              )}
+
               {/* Gauge rating */}
               <div className="report-rating-card">
                 <div className="rating-gauge-bar">
@@ -526,7 +571,7 @@ export default function JobScanner() {
         .job-scanner-container {
           width: 100%;
         }
-
+        
         .scanner-layout {
           display: grid;
           grid-template-columns: 1.1fr 0.9fr;
@@ -966,6 +1011,38 @@ export default function JobScanner() {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 1rem;
+        }
+        
+                .remote-alert-banner {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.75rem;
+          background: rgba(245, 158, 11, 0.08);
+          border: 1px solid rgba(245, 158, 11, 0.25);
+          border-radius: var(--radius-sm);
+          padding: 1rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .remote-alert-banner svg {
+          color: var(--score-mid);
+          flex-shrink: 0;
+          margin-top: 2px;
+        }
+
+        .remote-alert-banner strong {
+          display: block;
+          font-size: 0.85rem;
+          font-weight: 700;
+          color: #f59e0b;
+          margin-bottom: 0.25rem;
+        }
+
+        .remote-alert-banner p {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+          line-height: 1.4;
+          margin: 0;
         }
 
         @media (max-width: 600px) {

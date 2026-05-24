@@ -40,6 +40,19 @@ export default function JobInspector({ job, onClose }) {
       </div>
 
       <div className="inspector-content">
+        {/* Warning for a non remote jobs */}
+        {aiDetails && aiDetails.isRemote === false && (
+          <div className='remote-alert-banner animate-fade-in' style={
+            { marginBottom: '1.25rem'}
+          }>
+            <AlertTriangle size={18}/>
+            <div>
+              <strong>Non-Remote Role Alert</strong>
+              <p>This job listing is flagged as On-site or Hybrid. TrustRemote is optimized for remote role verification only.</p>
+            </div>
+          </div>
+        )}
+
         {/* Trust Score Radial Card */}
         <div className="trust-score-card">
           <div className="radial-score-container">
@@ -497,6 +510,38 @@ export default function JobInspector({ job, onClose }) {
           cursor: not-allowed;
           box-shadow: none;
         }
+                  .remote-alert-banner {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.75rem;
+          background: rgba(245, 158, 11, 0.08);
+          border: 1px solid rgba(245, 158, 11, 0.25);
+          border-radius: var(--radius-sm);
+          padding: 1rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .remote-alert-banner svg {
+          color: var(--score-mid);
+          flex-shrink: 0;
+          margin-top: 2px;
+        }
+
+        .remote-alert-banner strong {
+          display: block;
+          font-size: 0.85rem;
+          font-weight: 700;
+          color: #f59e0b;
+          margin-bottom: 0.25rem;
+        }
+
+        .remote-alert-banner p {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+          line-height: 1.4;
+          margin: 0;
+        }
+
 
         @media (max-width: 640px) {
           .audit-grid {

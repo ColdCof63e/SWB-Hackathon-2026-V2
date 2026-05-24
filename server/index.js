@@ -36,9 +36,10 @@ if (process.env.GEMINI_API_KEY) {
 // ----------------------------------------------------
 // Core Heuristic Fallback Analysis Engine
 // ----------------------------------------------------
-function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
+function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '', location = '') {
   const descLower = description.toLowerCase();
   const contactLower = recruiterInfo.toLowerCase();
+  const locLower = location.toLowerCase();
 
   let score = 100;
   const redFlags = [];
@@ -51,6 +52,27 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
   let jdDomain = '';
   let detectedATS = '';
   let detectedPortal = '';
+
+  // Remote role check
+  const textForRemoteCheck = `${location} ${description}`.toLowerCase();
+  const onsiteIndicators = [
+    'onsite', 
+    'on-site', 
+    'hybrid', 
+    'in-office', 
+    'in office', 
+    'in-person work', 
+    'in-person required', 
+    'in-person role', 
+    'work in-person', 
+    'work in person', 
+    'commute to', 
+    'relocate to'
+  ];
+  const hasOnsiteTerms = onsiteIndicators.some(term => textForRemoteCheck.includes(term));
+  const hasRemoteTerms = textForRemoteCheck.includes('remote') || textForRemoteCheck.includes('wfh') || textForRemoteCheck.includes('work from home');
+  const isRemote = hasOnsiteTerms ? false : (hasRemoteTerms || locLower.includes('remote'));
+
   // 1. Recruiter Email check
   if (recruiterInfo) {
     if (contactLower.includes('gmail.com') || contactLower.includes('yahoo.com') || contactLower.includes('outlook.com') || contactLower.includes('hotmail.com')) {
@@ -198,6 +220,7 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
   return {
     trustScore: score,
     status,
+    isRemote,
     overallVerdict,
     redFlags,
     greenFlags,
@@ -215,7 +238,7 @@ function analyzeWithHeuristics(description, recruiterInfo = '', jdUrl = '') {
 // ----------------------------------------------------
 // Gemini AI-Powered Analysis Engine
 // ----------------------------------------------------
-async function analyzeWithGemini(description, recruiterInfo = '', jdUrl = '') {
+async function analyzeWithGemini(description, recruiterInfo = '', jdUrl = '', location = '') {
   if (!genAI) {
     throw new Error('Gemini client not initialized');
   }
@@ -227,7 +250,13 @@ async function analyzeWithGemini(description, recruiterInfo = '', jdUrl = '') {
   });
 
   const prompt = `Analyze this remote job description and recruiter contact info for authenticity and legitimacy. Identify if this is a legitimate remote job, a suspicious/unverified posting, or an outright scam.
+  Also, analyze if the job is actually remote or if it contains hybrid/on-site requirements.
   
+  Job Location:
+  """
+  ${location || 'Unspecified'}
+  """
+
   Job Description:
   """
   ${description}
@@ -247,6 +276,7 @@ async function analyzeWithGemini(description, recruiterInfo = '', jdUrl = '') {
   {
     "trustScore": number (integer between 0 and 100),
     "status": "Verified" | "Suspicious" | "Scam",
+    "isRemote": boolean (true if the job is fully remote, false if it mentions hybrid, on-site, in-office requirements or lacks remote flexibility),
     "overallVerdict": string (2-3 sentences explaining the assessment details),
     "redFlags": [array of strings describing identified red flags, empty if none],
     "greenFlags": [array of strings describing identified legitimacy signals],
@@ -347,13 +377,13 @@ app.post('/api/jobs', async (req, res) => {
     let analysis;
     if (genAI) {
       try {
-        analysis = await analyzeWithGemini(description, recruiterInfo, jdUrl);
+        analysis = await analyzeWithGemini(description, recruiterInfo, jdUrl, location);
       } catch (geminiError) {
         console.error('Gemini API call failed, falling back to heuristics:', geminiError.message);
-        analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl);
+        analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl, location);
       }
     } else {
-      analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl);
+      analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl, location);
     }
 
     // Get initials for the company
@@ -393,6 +423,7 @@ app.post('/api/jobs', async (req, res) => {
 // 3. POST /api/scan - Dynamic parser for description text
 app.post('/api/scan', async (req, res) => {
   let { description, recruiterInfo, jdUrl } = req.body;
+  let scrapedLocation = '';
 
   if (!description && jdUrl) {
     try {
@@ -402,6 +433,7 @@ app.post('/api/scan', async (req, res) => {
       if (!recruiterInfo && scraped.recruiterInfo) {
         recruiterInfo = scraped.recruiterInfo;
       }
+      scrapedLocation = scraped.location;
     } catch (scrapeErr) {
       console.error('Auto-scraping failed:', scrapeErr.message);
     }
@@ -416,14 +448,14 @@ app.post('/api/scan', async (req, res) => {
     if (genAI) {
       try {
         console.log('Running analysis with Google Gemini API...');
-        analysis = await analyzeWithGemini(description, recruiterInfo, jdUrl);
+        analysis = await analyzeWithGemini(description, recruiterInfo, jdUrl, scrapedLocation);
       } catch (geminiError) {
         console.error('Gemini analysis failed, running heuristics fallback:', geminiError.message);
-        analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl);
+        analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl, scrapedLocation);
       }
     } else {
       console.log('Running analysis with heuristic fallback filters...');
-      analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl);
+      analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl, scrapedLocation);
     }
 
     res.json(analysis);
