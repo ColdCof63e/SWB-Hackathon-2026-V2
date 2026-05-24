@@ -22,12 +22,12 @@ jobs:
     - name: Build application (if needed)
       run: npm run build
 
-    - name: Start dev server
-      run: npm run dev &
-      # The & runs it in the background so the next step can proceed
+    # - name: Start dev server
+    #   run: npm run dev &
+    #   # The & runs it in the background so the next step can proceed
 
-    - name: Wait for server to be ready
-      run: npx wait-on http://localhost:5173 --timeout 15000
+    # - name: Wait for server to be ready
+    #   run: npx wait-on http://localhost:5173 --timeout 15000
 
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
