@@ -9,7 +9,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
           <ShieldCheck className="logo-icon" size={28} />
         </div>
         <div className="brand-text">
-          <span className="brand-name">TrustRemote</span>
+          <span className="brand-name">Aegis</span>
           <span className="brand-tagline">AI Job Legitimacy Filter</span>
         </div>
       </div>
@@ -35,8 +35,8 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
       <div className="nav-status">
         <div className="status-dot"></div>
-        <span className="status-text">Engine Online</span>
-        <Cpu className="status-icon" size={16} />
+        {/* <span className="status-text">Engine Online</span>
+        <Cpu className="status-icon" size={16} /> */}
       </div>
 
       <style>{`

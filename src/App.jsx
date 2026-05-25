@@ -4,6 +4,7 @@ import StatsBanner from './components/StatsBanner';
 import JobList from './components/JobList';
 import JobInspector from './components/JobInspector';
 import JobScanner from './components/JobScanner';
+import WelcomeModal from './components/WelcomeModal';
 import { mockJobs } from './data/mockJobs';
 import { Shield, CheckCircle, Zap, Plus, X, Loader, Search } from 'lucide-react';
 
@@ -41,6 +42,21 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingStep, setScrapingStep] = useState('');
+
+  // FTUE State
+  const [showFtue, setShowFtue] = useState(false);
+
+  useEffect(() => {
+    const hasSeenFtue = localStorage.getItem('hasSeenFtue');
+    if (!hasSeenFtue) {
+      setShowFtue(true);
+    }
+  }, []);
+
+  const handleCloseFtue = () => {
+    localStorage.setItem('hasSeenFtue', 'true');
+    setShowFtue(false);
+  };
 
   // Lifted Search/Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -404,6 +420,7 @@ function App() {
 
   return (
     <div className="app-container">
+      {showFtue && <WelcomeModal onClose={handleCloseFtue} />}
       {/* Top Navigation */}
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
 

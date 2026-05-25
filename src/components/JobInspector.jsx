@@ -214,7 +214,17 @@ export default function JobInspector({ job, onClose }) {
           <button 
             className={`apply-cta-btn ${status === 'Scam' ? 'disabled' : ''}`}
             disabled={status === 'Scam'}
-            onClick={() => alert(status === 'Suspicious' ? 'Warning: You are visiting an unverified source. Please use caution when submitting private info.' : 'Redirecting securely to official application portal...')}
+            onClick={() => {
+              if (status === 'Suspicious') {
+                const proceed = window.confirm('Warning: You are visiting an unverified source. Please use caution when submitting private info. Proceed anyway?');
+                if (!proceed) return;
+              }
+              if (job.jdUrl) {
+                window.open(job.jdUrl, '_blank', 'noopener,noreferrer');
+              } else {
+                alert('No original application link was provided for this posting.');
+              }
+            }}
           >
             <span>{status === 'Scam' ? 'Flagged: Applying Disabled' : 'Apply Through Secure Pipeline'}</span>
             <ExternalLink size={16} />

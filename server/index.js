@@ -950,6 +950,27 @@ app.listen(PORT, async () => {
   
   try {
     await connectToDatabase();
+    
+    // Automatic background job ingestion interval
+    // Defaulting to 30 minutes (30 * 60 * 1000)
+    const SYNC_INTERVAL_MS = 3 * 60 * 1000;
+    console.log(`Starting automatic background job ingestion (runs every ${SYNC_INTERVAL_MS / 60000} minutes)`);
+    
+    setInterval(async () => {
+      console.log('--- Triggering automatic background job ingestion ---');
+      try {
+        // Auto-clean any legacy double-encoded HTML-polluted sync entries from database
+        await Job.deleteMany({
+          description: { $regex: /&lt;|&gt;|&amp;/ }
+        });
+        
+        const stats = await syncGlobalJobs(genAI, analyzeWithHeuristics, analyzeWithGemini);
+        console.log(`Automatic ingestion completed. Stats:`, stats);
+      } catch (err) {
+        console.error('Automatic background ingestion failed:', err.message);
+      }
+    }, SYNC_INTERVAL_MS);
+
   } catch (err) {
     console.error('CRITICAL ERROR: Failed to connect to MongoDB on startup:', err.message);
   }

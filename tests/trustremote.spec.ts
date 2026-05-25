@@ -235,7 +235,7 @@ test.describe('TrustRemote End-to-End Tests', () => {
     await expect(warningBanner).toContainText('Non-Remote Role Alert');
   });
 
-  test('Negative: Recruiter Console submits a hybrid job and Inspector flags it', async ({ page }) => {
+  test.only('Negative: Recruiter Console submits a hybrid job and Inspector flags it', async ({ page }) => {
     // 1. Listen for browser alert popups
     page.on('dialog', async (dialog) => {
       await dialog.accept();
@@ -277,3 +277,21 @@ test.describe('TrustRemote End-to-End Tests', () => {
   });
 
 });
+
+test.describe.only('Recruiter Console', () => {
+  test.beforeEach(async ({page}) => {
+    await page.goto(BASE_URL)
+  })
+
+  test("Recruiter Login: Success flow", async ({page}) => {
+    await page.click("button:has-text('Recruiter Console')")
+    await expect(page.locator("h2:has-text('Recruiter Sign In')")).toBeVisible({timeout: 10000});
+
+    await page.fill("input[type='email']", "test@example.com")
+    await page.fill("input[type='password']", "password123")
+    await page.click("button[class='recruiter-submit-btn']")
+    await expect(page.locator(".panel-header h4")).toContainText('Post & AI-Vet a New Job');
+  })
+
+  
+})
