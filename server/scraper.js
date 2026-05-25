@@ -46,6 +46,59 @@ export async function scrapeAndParseJob(url, genAI = null) {
   }
 
   console.log('Fetching job posting webpage:', url);
+
+  // Intercept Ashby HQ jobs to use their API directly because their site is an SPA
+  if (url.includes('jobs.ashbyhq.com')) {
+    try {
+      const urlObj = new URL(url);
+      const parts = urlObj.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) {
+        const org = parts[0];
+        const postingId = parts[parts.length - 1];
+        const apiUrl = 'https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobPosting';
+        console.log(`Ashby URL detected. Fetching from API: ${apiUrl}`);
+        
+        const apiRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            operationName: 'ApiJobPosting',
+            variables: {
+              organizationHostedJobsPageName: org,
+              postingId: postingId
+            },
+            query: 'query ApiJobPosting($organizationHostedJobsPageName: String!, $postingId: String!) { posting(id: $postingId) { title locationName descriptionHtml } }'
+          })
+        });
+
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          const job = apiData.data?.posting;
+          if (job) {
+            const title = job.title || '';
+            const company = org;
+            const location = job.locationName || 'Remote';
+            let description = job.descriptionHtml || '';
+            description = description.replace(/<[^>]*>/g, '\n').replace(/\n\s*\n+/g, '\n\n').trim();
+            const category = determineCategory(title, description);
+
+            return {
+              title,
+              company,
+              location,
+              salary: 'Unspecified',
+              category,
+              description,
+              recruiterInfo: ''
+            };
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Ashby API extraction failed. Falling back to normal scrape.', err);
+    }
+  }
+
   const response = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -90,7 +143,10 @@ export async function scrapeAndParseJob(url, genAI = null) {
       }`;
 
       const result = await model.generateContent(prompt);
-      const parsed = JSON.parse(result.response.text());
+      let responseText = result.response.text();
+      // Strip markdown code blocks if present
+      responseText = responseText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+      const parsed = JSON.parse(responseText);
       if (parsed.title && parsed.description) {
         console.log('Successfully extracted structured details via Gemini.');
         return parsed;
