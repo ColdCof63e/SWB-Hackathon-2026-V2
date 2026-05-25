@@ -14,6 +14,47 @@ export default function JobInspector({ job, onClose }) {
 
   const { title, company, trustScore, status, category, description, aiDetails } = job;
 
+  // Resolve values supporting both flat and nested metrics structures
+  const domainAge = aiDetails?.domainAge || aiDetails?.metrics?.domainAge || 'Unknown';
+  const recruiterEmail = aiDetails?.recruiterEmail || aiDetails?.metrics?.recruiterEmailStatus || aiDetails?.metrics?.recruiterEmail || 'Not specified';
+  const interviewChannel = aiDetails?.interviewChannel || aiDetails?.metrics?.interviewChannel || 'Not specified';
+  const equipmentClaim = aiDetails?.equipmentClaim || aiDetails?.metrics?.equipmentPolicy || aiDetails?.metrics?.equipmentClaim || 'Not specified';
+  const marketMatch = aiDetails?.marketMatch || aiDetails?.metrics?.marketMatch || 'Not specified';
+  const redFlags = aiDetails?.redFlags || [];
+  const greenFlags = aiDetails?.greenFlags || [];
+  const overallVerdict = aiDetails?.overallVerdict || 'Safety details are not available for this job.';
+
+  // Client-side fallback to decode legacy double-encoded HTML entity listings and strip markup
+  const cleanDescription = React.useMemo(() => {
+    if (!description) return '';
+    let prev;
+    let decoded = description;
+    let iterations = 0;
+    do {
+      prev = decoded;
+      decoded = decoded
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&middot;/g, '·')
+        .replace(/&rsquo;/g, "'")
+        .replace(/&lsquo;/g, "'")
+        .replace(/&ldquo;/g, '"')
+        .replace(/&rdquo;/g, '"')
+        .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+        .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+      iterations++;
+    } while (decoded !== prev && iterations < 4);
+    
+    return decoded
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, [description]);
+
   let statusClass = 'status-neutral';
   let bannerClass = 'banner-blue';
   if (status === 'Verified') {
@@ -63,7 +104,7 @@ export default function JobInspector({ job, onClose }) {
           </div>
           <div className="verdict-text-block">
             <h4>Safety Assessment</h4>
-            <p>{aiDetails.overallVerdict}</p>
+            <p>{overallVerdict}</p>
           </div>
         </div>
 
@@ -76,7 +117,7 @@ export default function JobInspector({ job, onClose }) {
                 <Building size={14} className="audit-icon" />
                 <span>Domain Registration Age</span>
               </div>
-              <div className="audit-item-value">{aiDetails.domainAge}</div>
+              <div className="audit-item-value">{domainAge}</div>
             </div>
 
             <div className="audit-item">
@@ -84,7 +125,7 @@ export default function JobInspector({ job, onClose }) {
                 <Mail size={14} className="audit-icon" />
                 <span>Recruiter Credentials</span>
               </div>
-              <div className="audit-item-value">{aiDetails.recruiterEmail}</div>
+              <div className="audit-item-value">{recruiterEmail}</div>
             </div>
 
             <div className="audit-item">
@@ -92,7 +133,7 @@ export default function JobInspector({ job, onClose }) {
                 <Calendar size={14} className="audit-icon" />
                 <span>Interview Verification</span>
               </div>
-              <div className="audit-item-value">{aiDetails.interviewChannel}</div>
+              <div className="audit-item-value">{interviewChannel}</div>
             </div>
 
             <div className="audit-item">
@@ -100,7 +141,7 @@ export default function JobInspector({ job, onClose }) {
                 <Info size={14} className="audit-icon" />
                 <span>Equipment Policy</span>
               </div>
-              <div className="audit-item-value">{aiDetails.equipmentClaim}</div>
+              <div className="audit-item-value">{equipmentClaim}</div>
             </div>
 
             <div className="audit-item text-long">
@@ -108,7 +149,7 @@ export default function JobInspector({ job, onClose }) {
                 <DollarSignMock size={14} className="audit-icon" />
                 <span>Salary Calibration</span>
               </div>
-              <div className="audit-item-value">{aiDetails.marketMatch}</div>
+              <div className="audit-item-value">{marketMatch}</div>
             </div>
 
             <div className="audit-item text-long">
@@ -117,23 +158,23 @@ export default function JobInspector({ job, onClose }) {
                 <span>Cross-Portal Footprint</span>
               </div>
               <div className="audit-item-value">
-                {aiDetails.metrics?.crossPortalIndex || aiDetails.crossPortalIndex || 'None Detected'}
+                {aiDetails?.metrics?.crossPortalIndex || aiDetails?.crossPortalIndex || 'None Detected'}
               </div>
             </div>
           </div>
         </div>
 
         {/* Security Signals */}
-        {(aiDetails.redFlags.length > 0 || aiDetails.greenFlags.length > 0) && (
+        {(redFlags.length > 0 || greenFlags.length > 0) && (
           <div className="signals-section">
-            {aiDetails.redFlags.length > 0 && (
+            {redFlags.length > 0 && (
               <div className="signal-block red">
                 <h4 className="signal-title">
                   <ShieldAlert className="signal-icon" size={16} />
-                  <span>AI Flagged Red Flags ({aiDetails.redFlags.length})</span>
+                  <span>AI Flagged Red Flags ({redFlags.length})</span>
                 </h4>
                 <ul className="signal-list">
-                  {aiDetails.redFlags.map((flag, idx) => (
+                  {redFlags.map((flag, idx) => (
                     <li key={idx} className="signal-item">
                       <AlertTriangle className="bullet-icon-red" size={14} />
                       <span>{flag}</span>
@@ -143,14 +184,14 @@ export default function JobInspector({ job, onClose }) {
               </div>
             )}
 
-            {aiDetails.greenFlags.length > 0 && (
+            {greenFlags.length > 0 && (
               <div className="signal-block green">
                 <h4 className="signal-title">
                   <ShieldCheck className="signal-icon" size={16} />
-                  <span>Legitimacy Signals ({aiDetails.greenFlags.length})</span>
+                  <span>Legitimacy Signals ({greenFlags.length})</span>
                 </h4>
                 <ul className="signal-list">
-                  {aiDetails.greenFlags.map((flag, idx) => (
+                  {greenFlags.map((flag, idx) => (
                     <li key={idx} className="signal-item">
                       <CheckCircle2 className="bullet-icon-green" size={14} />
                       <span>{flag}</span>
@@ -165,7 +206,7 @@ export default function JobInspector({ job, onClose }) {
         {/* Description */}
         <div className="desc-section">
           <h3 className="section-title">Job Summary</h3>
-          <p className="desc-text">{description}</p>
+          <p className="desc-text">{cleanDescription}</p>
         </div>
 
         {/* Apply CTA */}
@@ -183,13 +224,10 @@ export default function JobInspector({ job, onClose }) {
 
       <style>{`
         .job-inspector {
-          position: sticky;
-          top: 1.5rem;
           display: flex;
           flex-direction: column;
           border-radius: var(--radius-md);
           overflow: hidden;
-          max-height: calc(100vh - 12rem);
           height: 100%;
         }
 
@@ -201,7 +239,7 @@ export default function JobInspector({ job, onClose }) {
           justify-content: center;
           text-align: center;
           gap: 1rem;
-          height: 380px;
+          height: 100%;
           border-radius: var(--radius-md);
         }
 
@@ -295,11 +333,12 @@ export default function JobInspector({ job, onClose }) {
 
         .inspector-content {
           padding: 1.5rem;
-          overflow-y: auto;
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
           text-align: left;
+          flex-grow: 1;
+          overflow-y: auto;
         }
 
         .trust-score-card {
@@ -414,6 +453,8 @@ export default function JobInspector({ job, onClose }) {
           font-size: 0.8rem;
           font-weight: 500;
           color: white;
+          word-break: break-word;
+          overflow-wrap: break-word;
         }
 
         .signal-block {
@@ -542,6 +583,24 @@ export default function JobInspector({ job, onClose }) {
           margin: 0;
         }
 
+
+        @media (max-width: 1200px) {
+          .job-inspector {
+            position: relative;
+            top: 0;
+            max-width: 600px;
+            width: 100%;
+            max-height: 85vh;
+            height: auto;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            overflow: hidden;
+          }
+          
+          .inspector-content {
+            overflow-y: auto;
+          }
+        }
 
         @media (max-width: 640px) {
           .audit-grid {

@@ -102,10 +102,13 @@ test.describe('TrustRemote End-to-End Tests', () => {
       await dialog.accept();
     });
 
-    // 2. Navigate to Recruiter Console
+    // 2. Navigate to Recruiter Console and Sign Up
     await page.click('button:has-text("Recruiter Console")');
-    await page.fill('input[placeholder="Enter recruiter passcode..."]', 'hackathon2026secret');
-    await page.click('button:has-text("Unlock Console")');
+    await page.click('button:has-text("Sign Up")');
+    const uniqueEmail = `recruiter-${Date.now()}@playwright.corp`;
+    await page.fill('input[placeholder="Corporate Email (e.g. name@company.com)"]', uniqueEmail);
+    await page.fill('input[placeholder="Password"]', 'securepassword123');
+    await page.click('button:has-text("Create Account")');
     await expect(page.locator('.panel-header h4').first()).toContainText('Post & AI-Vet a New Job');
 
     // 3. Fill out the posting form
@@ -125,6 +128,36 @@ test.describe('TrustRemote End-to-End Tests', () => {
     // 5. Verify it appears in the Recruiter feed on the right
     const recruiterCard = page.locator('.recruiter-job-card h4', { hasText: 'Automated QA Engineer' }).first();
     await expect(recruiterCard).toBeVisible();
+  });
+
+  test('Positive: Job Board filters and bookmarks function correctly', async ({ page }) => {
+    // 1. Navigate to Jobs Board
+    await page.click('button:has-text("Jobs Board")');
+    
+    // 2. Get the title of the first job card
+    const firstJobCard = page.locator('.job-card').first();
+    await expect(firstJobCard).toBeVisible();
+    const jobTitle = await firstJobCard.locator('.job-title').innerText();
+
+    // 3. Click the bookmark (heart) button on the first job card
+    const heartBtn = firstJobCard.locator('.bookmark-btn');
+    await expect(heartBtn).toBeVisible();
+    await heartBtn.click();
+
+    // 4. Toggle the "Saved Jobs" switch in the sidebar
+    const savedJobsSwitch = page.locator('aside.filters-sidebar input[type="checkbox"]').nth(1);
+    await savedJobsSwitch.check();
+
+    // 5. Verify only bookmarked job is visible
+    const visibleCards = page.locator('.job-card');
+    const visibleCount = await visibleCards.count();
+    expect(visibleCount).toBe(1);
+    await expect(visibleCards.first().locator('.job-title')).toContainText(jobTitle);
+
+    // 6. Uncheck Saved Jobs and verify other jobs show up
+    await savedJobsSwitch.uncheck();
+    const allCount = await visibleCards.count();
+    expect(allCount).toBeGreaterThan(1);
   });
 
   // ==========================================
@@ -159,10 +192,14 @@ test.describe('TrustRemote End-to-End Tests', () => {
   });
 
   test('Negative: Prevent posting if required fields are missing', async ({ page }) => {
-    // 1. Navigate to Recruiter Console
+    // 1. Navigate to Recruiter Console and Sign Up
     await page.click('button:has-text("Recruiter Console")');
-    await page.fill('input[placeholder="Enter recruiter passcode..."]', 'hackathon2026secret');
-    await page.click('button:has-text("Unlock Console")');
+    await page.click('button:has-text("Sign Up")');
+    const uniqueEmail = `recruiter-${Date.now()}@playwright.corp`;
+    await page.fill('input[placeholder="Corporate Email (e.g. name@company.com)"]', uniqueEmail);
+    await page.fill('input[placeholder="Password"]', 'securepassword123');
+    await page.click('button:has-text("Create Account")');
+    await expect(page.locator('.panel-header h4').first()).toContainText('Post & AI-Vet a New Job');
 
     // 2. Leave "Job Title" empty but fill Company
     await page.fill('input[placeholder="e.g. Acme group"]', 'Acme Empty Title');
@@ -204,10 +241,13 @@ test.describe('TrustRemote End-to-End Tests', () => {
       await dialog.accept();
     });
 
-    // 2. Navigate to Recruiter Console
+    // 2. Navigate to Recruiter Console and Sign Up
     await page.click('button:has-text("Recruiter Console")');
-    await page.fill('input[placeholder="Enter recruiter passcode..."]', 'hackathon2026secret');
-    await page.click('button:has-text("Unlock Console")');
+    await page.click('button:has-text("Sign Up")');
+    const uniqueEmail = `recruiter-${Date.now()}@playwright.corp`;
+    await page.fill('input[placeholder="Corporate Email (e.g. name@company.com)"]', uniqueEmail);
+    await page.fill('input[placeholder="Password"]', 'securepassword123');
+    await page.click('button:has-text("Create Account")');
     await expect(page.locator('.panel-header h4').first()).toContainText('Post & AI-Vet a New Job');
 
     // 3. Fill out the posting form with a hybrid job

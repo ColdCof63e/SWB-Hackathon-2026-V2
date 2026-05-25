@@ -57,4 +57,8 @@ const JobSchema = new mongoose.Schema({
   timestamps: true // This will add createdAt and updatedAt automatically
 });
 
+// Auto-delete job listings after a set number of days to prevent MongoDB free tier storage overflow
+const RETENTION_IN_DAYS = 30;
+JobSchema.index({ createdAt: 1 }, { expireAfterSeconds: RETENTION_IN_DAYS * 24 * 60 * 60 });
+
 export default mongoose.model('Job', JobSchema);

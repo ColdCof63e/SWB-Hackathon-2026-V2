@@ -8,6 +8,11 @@ jobs:
   test:
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
     steps:
     - uses: actions/checkout@v4
     
@@ -17,7 +22,7 @@ jobs:
 
     # Using npm install handles edge cases where package-lock isn't perfectly synced yet
     - name: Install dependencies
-      run: npm install
+      run: npm install && npm install --prefix server
     
     - name: Build application (if needed)
       run: npm run build

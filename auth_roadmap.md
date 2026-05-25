@@ -6,12 +6,12 @@ This roadmap divides the tasks required to implement the passcode-based recruite
 
 ## 🛠️ Step-by-Step Task Division
 
-### Phase 1: Backend Security
+### Phase 1: Backend Security [COMPLETED]
 
 - **Pattern**: 🔒 **Developer Coding (You)**
 - **Tasks**:
-  1. Add the secret passcode `RECRUITER_PASSCODE=hackathon2026secret` to your [server/.env](file:///e:/SWB Hackathon V2/server/.env) file.
-  2. Protect the `POST /api/jobs` endpoint inside [server/index.js](file:///e:/SWB Hackathon V2/server/index.js) (around line 275). Extract the passcode from the `Authorization` header (`Bearer <passcode>`) and verify it against `process.env.RECRUITER_PASSCODE`. Return `401 Unauthorized` if invalid or missing.
+  1. [x] Add the secret passcode `RECRUITER_PASSCODE=hackathon2026secret` to your [server/.env](file:///e:/SWB Hackathon V2/server/.env) file.
+  2. [x] Protect the `POST /api/jobs` endpoint inside [server/index.js](file:///e:/SWB Hackathon V2/server/index.js) (around line 275). Extract the passcode from the `Authorization` header (`Bearer <passcode>`) and verify it against `process.env.RECRUITER_PASSCODE`. Return `401 Unauthorized` if invalid or missing.
 - **Guiding Context**: See **Section 1** of [recruiter_auth_guide.md](file:///e:/SWB Hackathon V2/recruiter_auth_guide.md) for inspiration!
 
 ---
@@ -40,4 +40,3 @@ This roadmap divides the tasks required to implement the passcode-based recruite
 - **Pattern**: ⚡ **Human-out-of-the-Loop (HOOTL / Autopilot)**
 - **Tasks**:
   1. [x] **AI (Antigravity)** has updated the [design_doc.md](file:///e:/SWB Hackathon V2/design_doc.md) and [README.md](file:///e:/SWB Hackathon V2/README.md) to record the passcode mechanism and API header requirement.
-

@@ -1,28 +1,44 @@
 import React from 'react';
 import { Database, ShieldCheck, ShieldAlert, Award } from 'lucide-react';
 
-export default function StatsBanner() {
+export default function StatsBanner({ jobs = [] }) {
+  const totalCount = jobs.length;
+  const verifiedCount = jobs.filter(j => j.status === 'Verified').length;
+  const scamsCount = jobs.filter(j => j.status === 'Scam').length;
+  const trustIndex = totalCount > 0 ? ((verifiedCount / totalCount) * 100).toFixed(1) : '0.0';
+
+  // Count how many jobs were posted in the last 24h / today
+  const todayCount = jobs.filter(job => {
+    if (job.createdAt) {
+      const createdDate = new Date(job.createdAt);
+      const now = new Date();
+      return (now - createdDate) < 24 * 60 * 60 * 1000;
+    }
+    const lower = (job.postedDate || '').toLowerCase();
+    return lower.includes('hour') || lower.includes('minute') || lower.includes('second') || lower.includes('today') || lower.includes('just now');
+  }).length;
+
   const stats = [
     {
       id: 'scanned',
       label: 'Remote Jobs Evaluated',
-      value: '1,542',
-      change: '+14 today',
+      value: totalCount.toLocaleString(),
+      change: `+${todayCount} today`,
       icon: <Database className="stat-icon text-blue" size={24} />,
       colorClass: 'blue'
     },
     {
       id: 'legitimate',
       label: 'Verified Legitimate',
-      value: '1,289',
-      change: '83.5% Trust Index',
+      value: verifiedCount.toLocaleString(),
+      change: `${trustIndex}% Trust Index`,
       icon: <ShieldCheck className="stat-icon text-green" size={24} />,
       colorClass: 'green'
     },
     {
       id: 'scams',
       label: 'Scams Shielded',
-      value: '184',
+      value: scamsCount.toLocaleString(),
       change: '100% Blocked',
       icon: <ShieldAlert className="stat-icon text-red" size={24} />,
       colorClass: 'red'

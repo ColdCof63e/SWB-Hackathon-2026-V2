@@ -6,8 +6,40 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 import Job from './models/job.model.js';
+import Recruiter from './models/recruiter.model.js';
 import { scrapeAndParseJob } from './scraper.js';
+import { syncGlobalJobs } from './ingest.js';
+
+// Crypto Helpers for Recruiter Auth
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+function generateToken(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const secret = process.env.JWT_SECRET || 'hackathon_default_secret_key_12345';
+  const signature = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${signature}`;
+}
+
+function verifyToken(token) {
+  try {
+    const [header, body, signature] = token.split('.');
+    if (!header || !body || !signature) return null;
+    const secret = process.env.JWT_SECRET || 'hackathon_default_secret_key_12345';
+    const expectedSignature = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
+    if (signature !== expectedSignature) return null;
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+const pendingChallenges = new Map();
 
 // Resolve Paths (ES Modules helper)
 const __filename = fileURLToPath(import.meta.url);
@@ -23,6 +55,34 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+let cachedConnection = null;
+
+async function connectToDatabase() {
+  if (cachedConnection && mongoose.connection.readyState === 1) {
+    return cachedConnection;
+  }
+  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/trustremote';
+  console.log('Connecting to MongoDB...');
+  cachedConnection = await mongoose.connect(MONGODB_URI);
+  console.log('Successfully connected to MongoDB!');
+  
+  // Seed initial mock jobs if DB is empty
+  await seedDatabase();
+  return cachedConnection;
+}
+
+// Database Connection Middleware for Serverless / Dev environment
+app.use(async (req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (err) {
+    console.error('Database connection error in middleware:', err.message);
+    res.status(500).json({ error: 'Database connection failed.' });
+  }
+});
+
 
 // Initialize Google Gemini API Client
 let genAI = null;
@@ -337,6 +397,234 @@ async function seedDatabase() {
 // Express API Endpoints
 // ----------------------------------------------------
 
+// Recruiter Authentication & Passkeys Endpoints
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  const publicDomains = [
+    'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'aol.com',
+    'icloud.com', 'zoho.com', 'proton.me', 'protonmail.com', 'yandex.com', 'mail.com'
+  ];
+  const emailDomain = email.split('@')[1]?.toLowerCase();
+  if (!emailDomain || publicDomains.includes(emailDomain)) {
+    return res.status(400).json({ error: 'Registration requires an official corporate email domain.' });
+  }
+
+  try {
+    const existing = await Recruiter.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ error: 'Email is already registered.' });
+    }
+
+    const hashedPassword = hashPassword(password);
+    const newRecruiter = new Recruiter({
+      email,
+      password: hashedPassword
+    });
+    await newRecruiter.save();
+
+    const token = generateToken({ email });
+    res.status(201).json({ token, email });
+  } catch (error) {
+    console.error('Registration failed:', error);
+    res.status(500).json({ error: 'Internal server error during registration.' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  try {
+    const recruiter = await Recruiter.findOne({ email });
+    if (!recruiter) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    if (recruiter.password !== hashPassword(password)) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const token = generateToken({ email });
+    res.json({
+      token,
+      email,
+      hasPasskey: !!recruiter.passkeyCredentialId
+    });
+  } catch (error) {
+    console.error('Login failed:', error);
+    res.status(500).json({ error: 'Internal server error during login.' });
+  }
+});
+
+// Passkey WebAuthn Routes
+app.post('/api/auth/passkey/register-challenge', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required.' });
+  }
+
+  try {
+    const recruiter = await Recruiter.findOne({ email });
+    if (!recruiter) {
+      return res.status(404).json({ error: 'Recruiter not found.' });
+    }
+
+    const challenge = crypto.randomBytes(32).toString('base64url');
+    pendingChallenges.set(`${email}-register`, challenge);
+
+    res.json({
+      challenge,
+      rp: {
+        name: 'TrustRemote',
+        id: 'localhost'
+      },
+      user: {
+        id: Buffer.from(email).toString('base64url'),
+        name: email,
+        displayName: email
+      },
+      pubKeyCredParams: [
+        { alg: -7, type: 'public-key' },  // ES256
+        { alg: -257, type: 'public-key' } // RS256
+      ],
+      authenticatorSelection: {
+        residentKey: 'required',
+        requireResidentKey: true,
+        userVerification: 'preferred'
+      },
+      timeout: 60000,
+      attestation: 'none'
+    });
+  } catch (error) {
+    console.error('Register challenge failed:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/auth/passkey/register-verify', async (req, res) => {
+  const { email, credentialId, publicKey } = req.body;
+  if (!email || !credentialId || !publicKey) {
+    return res.status(400).json({ error: 'Missing required parameters.' });
+  }
+
+  try {
+    const recruiter = await Recruiter.findOne({ email });
+    if (!recruiter) {
+      return res.status(404).json({ error: 'Recruiter not found.' });
+    }
+
+    recruiter.passkeyCredentialId = credentialId;
+    recruiter.passkeyPublicKey = publicKey;
+    await recruiter.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Register verify failed:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/auth/passkey/login-challenge', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required.' });
+  }
+
+  try {
+    const recruiter = await Recruiter.findOne({ email });
+    if (!recruiter || !recruiter.passkeyCredentialId) {
+      return res.status(400).json({ error: 'Recruiter does not have a registered passkey.' });
+    }
+
+    const challenge = crypto.randomBytes(32).toString('base64url');
+    pendingChallenges.set(`${email}-login`, challenge);
+
+    res.json({
+      challenge,
+      rpId: 'localhost',
+      allowCredentials: [
+        {
+          id: recruiter.passkeyCredentialId,
+          type: 'public-key'
+        }
+      ],
+      timeout: 60000,
+      userVerification: 'preferred'
+    });
+  } catch (error) {
+    console.error('Login challenge failed:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.post('/api/auth/passkey/login-verify', async (req, res) => {
+  const { email, credentialId, clientDataJSON, authenticatorData, signature } = req.body;
+  if (!email || !credentialId || !clientDataJSON || !authenticatorData || !signature) {
+    return res.status(400).json({ error: 'Missing required parameters.' });
+  }
+
+  try {
+    const recruiter = await Recruiter.findOne({ email });
+    if (!recruiter || recruiter.passkeyCredentialId !== credentialId) {
+      return res.status(400).json({ error: 'Invalid credential ID or recruiter.' });
+    }
+
+    const storedChallenge = pendingChallenges.get(`${email}-login`);
+    if (!storedChallenge) {
+      return res.status(400).json({ error: 'No active login challenge found for this email.' });
+    }
+
+    // Verify challenge matches in clientDataJSON
+    const clientDataJSONBuffer = Buffer.from(clientDataJSON, 'base64url');
+    const clientDataObj = JSON.parse(clientDataJSONBuffer.toString('utf8'));
+    if (clientDataObj.challenge !== storedChallenge) {
+      return res.status(400).json({ error: 'Invalid challenge in client data.' });
+    }
+
+    // Verify signature
+    const clientDataHash = crypto.createHash('sha256').update(clientDataJSONBuffer).digest();
+    const signedData = Buffer.concat([Buffer.from(authenticatorData, 'base64url'), clientDataHash]);
+    const signatureBuffer = Buffer.from(signature, 'base64url');
+    const publicKeyBuffer = Buffer.from(recruiter.passkeyPublicKey, 'base64url');
+
+    const publicKeyObject = crypto.createPublicKey({
+      key: publicKeyBuffer,
+      format: 'der',
+      type: 'spki'
+    });
+
+    const isVerified = crypto.verify(
+      undefined,
+      signedData,
+      publicKeyObject,
+      signatureBuffer
+    );
+
+    if (!isVerified) {
+      return res.status(400).json({ error: 'Passkey signature verification failed.' });
+    }
+
+    // Clear challenge
+    pendingChallenges.delete(`${email}-login`);
+
+    // Increment sign count
+    recruiter.passkeySignCount = (recruiter.passkeySignCount || 0) + 1;
+    await recruiter.save();
+
+    const token = generateToken({ email });
+    res.json({ token, email });
+  } catch (error) {
+    console.error('Login verify failed:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // 1. GET /api/jobs - Fetch all listings
 app.get('/api/jobs', async (req, res) => {
   try {
@@ -350,20 +638,30 @@ app.get('/api/jobs', async (req, res) => {
 
 // 2. POST /api/jobs - Submit a new job to the board (auto-vets with AI)
 app.post('/api/jobs', async (req, res) => {
-
   // Authorization check
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer')) {
-    return res.status(401).json({error: 'Unauthorized: Missing or malformed authorization header.'})
+    return res.status(401).json({ error: 'Unauthorized: Missing or malformed authorization header.' });
   }
 
-  // Extracting passcode here
-  const passcode = authHeader.split(' ')[1]
+  const token = authHeader.split(' ')[1];
 
-  // Validating agains server side .env variables
-  if (passcode !== process.env.RECRUITER_PASSCODE) {
-    return res.status(401).json({error: 'Unauthorized: Invalid recruiter authentication passcode.'})
+  let isAuthorized = false;
+  let recruiterEmail = 'anonymous';
+
+  if (token === process.env.RECRUITER_PASSCODE) {
+    isAuthorized = true;
+  } else {
+    const decoded = verifyToken(token);
+    if (decoded && decoded.email) {
+      isAuthorized = true;
+      recruiterEmail = decoded.email;
+    }
+  }
+
+  if (!isAuthorized) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid recruiter authentication credentials.' });
   }
 
   const { title, company, location, salary, category, description, recruiterInfo, jdUrl } = req.body;
@@ -417,6 +715,119 @@ app.post('/api/jobs', async (req, res) => {
   } catch (error) {
     console.error('Error adding job to database:', error);
     res.status(500).json({ error: 'Internal server error while processing listing.' });
+  }
+});
+
+// 2.5. POST /api/webhooks/ats - Ingest jobs from Greenhouse/Workday/Lever webhooks
+app.post('/api/webhooks/ats', async (req, res) => {
+  const webhookSecret = req.headers['x-ats-secret'] || req.query.secret;
+  const expectedSecret = process.env.ATS_WEBHOOK_SECRET || 'hackathon2026webhooksecret';
+
+  if (!webhookSecret || webhookSecret !== expectedSecret) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid ATS webhook secret.' });
+  }
+
+  const body = req.body;
+
+  // Handle Greenhouse ping event
+  if (body.action === 'ping') {
+    return res.json({ success: true, message: 'Greenhouse webhook ping successful.' });
+  }
+
+  let jobData = {};
+
+  if (body.job) {
+    jobData = body.job;
+  } else if (body.payload && body.payload.job) {
+    jobData = body.payload.job;
+  } else {
+    jobData = body;
+  }
+
+  // Map incoming fields from various ATS formats
+  const title = jobData.title || jobData.jobTitle || jobData.name;
+  const company = jobData.company || jobData.companyName || jobData.organization || 'ATS Partner Org';
+  const description = jobData.description || jobData.jobDescription || jobData.notes || jobData.content;
+  const location = jobData.location || jobData.officeLocation || 'Remote';
+  const salary = jobData.salary || jobData.compensation || 'Unspecified';
+  const category = jobData.category || jobData.department || 'General Remote';
+  const jdUrl = jobData.jdUrl || jobData.jobUrl || jobData.url || jobData.link;
+  const recruiterInfo = jobData.recruiterInfo || jobData.recruiterEmail || jobData.contact;
+
+  if (!title || !company || !description) {
+    return res.status(400).json({ 
+      error: 'Bad Request: Webhook payload missing required fields (title, company, description).',
+      received: { title, company, hasDescription: !!description }
+    });
+  }
+
+  try {
+    console.log(`Webhook Ingestion: Vetting and adding new job "${title}" from company "${company}"...`);
+    
+    // Check de-duplication
+    const existing = await Job.findOne({ title, company });
+    if (existing) {
+      return res.status(200).json({ success: true, message: 'Job already indexed.', jobId: existing.id });
+    }
+
+    let analysis;
+    if (genAI) {
+      try {
+        analysis = await analyzeWithGemini(description, recruiterInfo, jdUrl, location);
+      } catch (geminiError) {
+        console.error('Gemini API call failed, falling back to heuristics:', geminiError.message);
+        analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl, location);
+      }
+    } else {
+      analysis = analyzeWithHeuristics(description, recruiterInfo, jdUrl, location);
+    }
+
+    // Get initials for the company
+    const companyInitials = company
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 3);
+
+    // Dynamic category resolution
+    let determinedCategory = category || 'General Remote';
+    const text = `${title} ${description}`.toLowerCase();
+    if (text.includes('qa') || text.includes('test') || text.includes('quality assurance')) {
+      determinedCategory = 'QA & Testing';
+    } else if (text.includes('data') || text.includes('analyst') || text.includes('analytics')) {
+      determinedCategory = 'Data & Analytics';
+    } else if (text.includes('product manager') || text.includes('product management')) {
+      determinedCategory = 'Product Management';
+    } else if (text.includes('design') || text.includes('ui/') || text.includes('ux') || text.includes('figma')) {
+      determinedCategory = 'Design';
+    } else if (text.includes('engineer') || text.includes('developer') || text.includes('programmer') || text.includes('software')) {
+      determinedCategory = 'Software Engineering';
+    }
+
+    const newJob = new Job({
+      id: `job-webhook-${Date.now()}`,
+      title,
+      company,
+      companyInitials,
+      location: location || 'Remote',
+      salary: salary || 'Unspecified',
+      postedDate: 'Just now',
+      trustScore: analysis.trustScore,
+      status: analysis.status,
+      category: determinedCategory,
+      description,
+      jdUrl: jdUrl || '',
+      aiDetails: analysis
+    });
+
+    await newJob.save();
+
+    console.log(`Webhook Ingested successfully: ${title} (${analysis.status} - Score: ${analysis.trustScore}%)`);
+    res.status(201).json({ success: true, message: 'Job successfully ingested and vetted.', job: newJob });
+  } catch (error) {
+    console.error('Error adding job from webhook:', error);
+    res.status(500).json({ error: 'Internal server error while processing webhook payload.' });
   }
 });
 
@@ -481,33 +892,68 @@ app.post('/api/scrape', async (req, res) => {
   }
 });
 
+// 5. GET /api/sync - Trigger global job ingestion
+// By Triggering feed aggregation and auto-vetting
+app.get('/api/jobs/sync', async (req, res) => {
+  const secret = req.query.secret || req.headers['x-cron-secret']
+
+  // Fallback to default developer secret if CRON_SECRET is not configured in dotenv
+  const expectedSecret = process.env.CRON_SECRET || "hackathon2026cronsecret"
+
+  if (!secret || secret !== expectedSecret) {
+    console.log('Unauthorized access attempt to global sync.')
+    return res.status(401).json({error: "Unauthorized: Invalid cron sync secret."})
+  }
+
+  try {
+    // Auto-clean any legacy double-encoded HTML-polluted sync entries from database
+    const cleanResult = await Job.deleteMany({
+      description: { $regex: /&lt;|&gt;|&amp;/ }
+    });
+    if (cleanResult.deletedCount > 0) {
+      console.log(`Cleaned up ${cleanResult.deletedCount} double-encoded HTML jobs from database.`);
+    }
+
+    // Injecting genAI and local analysis engine from index.js scope
+    // In other words, calling syncGlobalJobs function
+    const stats = await syncGlobalJobs(genAI, analyzeWithHeuristics, analyzeWithGemini);
+
+    res.json({
+      success: true,
+      message: "Global remote job feed sync completed",
+      stats: {
+        ...stats,
+        cleanedLegacyJobs: cleanResult.deletedCount
+      }
+    });
+  } catch(error) {
+    console.error('Manual feed sync failed: ', error)
+    res.status(500).json({
+      error: `Sync failed: ${error.message}`
+    })
+  }
+  
+})
+
 // ----------------------------------------------------
 // Database Connection & Server Startup Sequence
 // ----------------------------------------------------
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/trustremote';
 
-console.log('Connecting to MongoDB...');
-mongoose.connect(MONGODB_URI)
-  .then(async () => {
-    console.log('Successfully connected to MongoDB!');
-    
-    // Seed initial mock jobs if DB is empty
-    await seedDatabase();
-    
-    // Start Express Listener after DB is ready
-    app.listen(PORT, () => {
-      console.log(`==================================================`);
-      console.log(`TrustRemote Express Server running on port ${PORT}`);
-      console.log(`Local endpoints available:`);
-      console.log(` - GET  http://localhost:${PORT}/api/jobs`);
-      console.log(` - POST http://localhost:${PORT}/api/jobs`);
-      console.log(` - POST http://localhost:${PORT}/api/scan`);
-      console.log(`==================================================`);
-    });
-  })
-  .catch((err) => {
-    console.error('CRITICAL ERROR: Failed to connect to MongoDB:', err.message);
-    console.error('Please ensure MongoDB is running locally or check MONGODB_URI.');
-    process.exit(1);
-  });
+app.listen(PORT, async () => {
+  console.log(`==================================================`);
+  console.log(`TrustRemote Express Server running on port ${PORT}`);
+  console.log(`Local endpoints available:`);
+  console.log(` - GET  http://localhost:${PORT}/api/jobs`);
+  console.log(` - POST http://localhost:${PORT}/api/jobs`);
+  console.log(` - POST http://localhost:${PORT}/api/scan`);
+  console.log(`==================================================`);
+  
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error('CRITICAL ERROR: Failed to connect to MongoDB on startup:', err.message);
+  }
+});
+
+export default app;
 

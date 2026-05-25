@@ -17,9 +17,19 @@ The application utilizes the **Google Gemini API** (with a robust rule-based loc
 ## 💻 Key Features
 
 1. **Remote Job Legitimacy Feed**: Displays vetted opportunities. Users can inspect job details, view detailed legitimacy scores, and see custom red/green flag breakdown audits.
-2. **Interactive Security Scanner**: Allows jobseekers to paste raw job descriptions or correspondence, input recruiter contact info, and generate dynamic safety audit reports.
-3. **Job URL Scraper & Parser**: Automatically fetches and extracts job titles, descriptions, locations, and salaries from external job boards (like Rippling, Greenhouse, LinkedIn) to autofill forms or run scans.
-4. **Recruiter Console**: Restricted zone for recruiters to submit and vet new jobs before indexing. Protected with passcode authorization.
+2. **Redesigned Filter Header Row**: Relocated the search bar, legitimacy status tabs, and category pills outside the split-pane columns. They are now placed as a full-width row (`.filter-controls-row`) directly under the stats banner for an open, modern aesthetic.
+3. **Dynamic Dashboard Metrics**: Refactored the statistics cards banner to pull live data from MongoDB. It calculates total evaluated positions, verified items, averages the Trust Index, and logs shielded scams dynamically.
+4. **Left-Hand Filters Sidebar**:
+   - **Remote Only Switch**: Instantly filter out any hybrid or onsite roles.
+   - **Saved Jobs Toggle**: View only bookmarked jobs, persisted locally across sessions.
+   - **Trust Score Threshold**: Custom range slider to screen out positions below a set safety score.
+   - **Job Type Checkboxes**: Filter listings by Full-time, Part-time, Contract, or Internship.
+5. **Interactive Security Scanner**: Allows jobseekers to paste raw job descriptions or correspondence, input recruiter contact info, and generate dynamic safety audit reports.
+6. **Job URL Scraper & Parser**: Automatically fetches and extracts job titles, descriptions, locations, and salaries from external job boards (like Rippling, Greenhouse, LinkedIn) to autofill forms or run scans.
+7. **Secure Recruiter Console**: 
+   - **Corporate Domain Registration**: Requires a verified corporate email address (blocks common public domains like Gmail, Yahoo, etc.).
+   - **Passwordless Passkeys (WebAuthn)**: One-click passwordless logins using biometric hardware (Windows Hello, FaceID, TouchID) once enrolled.
+   - **Live AI Safety Vetting**: Automatic analysis of recruiter listings against scams prior to index inclusion.
 
 ---
 
@@ -42,7 +52,8 @@ Navigate to the `server` directory and configure environment variables in `serve
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/trustremote
 GEMINI_API_KEY=your_google_ai_studio_api_key
-RECRUITER_PASSCODE=your_secret_passcode
+JWT_SECRET=your_jwt_signing_secret_key
+RECRUITER_PASSCODE=hackathon2026secret
 ```
 
 Start the API server:
@@ -93,7 +104,8 @@ npx playwright test tests/trustremote.spec.ts --ui
 
 ---
 
-## 📖 Documentation
+## ☁️ Vercel Serverless Deployment
 
-- 👉 **[Design Document](file:///e:/SWB%20Hackathon%20V2/design_doc.md)**: Details the architectural components, URL scraping engine, safety vetting fallback algorithms, and API specifications.
-- 👉 **[Human-AI Interaction Guide](file:///e:/SWB%20Hackathon%20V2/human_loop_interaction.md)**: Documents the Human-in-the-Loop (HITL) and Human-on-the-Loop (HOTL) collaboration patterns utilized throughout this project's development.
+TrustRemote is optimized to run as a unified monorepo on Vercel:
+- **`vercel.json`**: Root configuration maps the client folder to static builds and proxies `/api/*` to serverless function endpoints.
+- **Connection Reuse**: Database calls in `server/index.js` use cached connection objects to prevent hitting MongoDB Atlas connection limits during high serverless scale-outs.

@@ -1,11 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Navbar from './components/Navbar';
 import StatsBanner from './components/StatsBanner';
 import JobList from './components/JobList';
 import JobInspector from './components/JobInspector';
 import JobScanner from './components/JobScanner';
 import { mockJobs } from './data/mockJobs';
-import { Shield, CheckCircle, Zap, Plus, X, Loader } from 'lucide-react';
+import { Shield, CheckCircle, Zap, Plus, X, Loader, Search } from 'lucide-react';
+
+// Base64url helper functions for WebAuthn client-side conversion
+function bufferToBase64Url(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+function base64UrlToBuffer(base64url) {
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+  const base64 = (base64url + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const raw = atob(base64);
+  const buffer = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    buffer[i] = raw.charCodeAt(i);
+  }
+  return buffer.buffer;
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState('scanner'); // 'board', 'scanner', or 'recruiter'
@@ -16,10 +42,27 @@ function App() {
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingStep, setScrapingStep] = useState('');
 
+  // Lifted Search/Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeFilter, setActiveFilter] = useState('All');
+
+  // Compute unique categories from jobs
+  const categories = useMemo(() => {
+    const list = new Set(jobs.map(job => job.category));
+    return ['All', ...Array.from(list)];
+  }, [jobs]);
+
   // Auth State
-  const [passcode, setPasscode] = useState(localStorage.getItem('recruiterPasscode') || '');
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('recruiterPasscode'));
-  const [loginInput, setLoginInput] = useState('');
+  const [token, setToken] = useState(localStorage.getItem('recruiterToken') || '');
+  const [recruiterEmail, setRecruiterEmail] = useState(localStorage.getItem('recruiterEmail') || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('recruiterToken'));
+  const [authMode, setAuthMode] = useState('login'); // 'login', 'register', or 'passkey'
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [hasPasskey, setHasPasskey] = useState(localStorage.getItem('recruiterHasPasskey') === 'true');
+  const [authError, setAuthError] = useState('');
+  const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
 
   // Form Fields
   const [formTitle, setFormTitle] = useState('');
@@ -29,7 +72,11 @@ function App() {
   const [formCategory, setFormCategory] = useState('Software Engineering');
   const [formRecruiter, setFormRecruiter] = useState('');
   const [formDesc, setFormDesc] = useState('');
-  const [formJdUrl, setFormJdUrl] = useState('')
+  const [formJdUrl, setFormJdUrl] = useState('');
+
+
+
+
 
   // Fetch Jobs from backend on Mount
   useEffect(() => {
@@ -62,7 +109,7 @@ function App() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${passcode}`
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
         title: formTitle,
@@ -157,22 +204,201 @@ function App() {
       });
   };
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (loginInput.trim() === '') {
-      alert('Please enter a passcode.');
+  const handleRegisterPasskey = async () => {
+    if (!recruiterEmail) return;
+    setIsRegisteringPasskey(true);
+    setAuthError('');
+    try {
+      const res = await fetch('/api/auth/passkey/register-challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: recruiterEmail })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to get register challenge');
+      }
+      const options = await res.json();
+
+      options.challenge = base64UrlToBuffer(options.challenge);
+      options.user.id = base64UrlToBuffer(options.user.id);
+
+      const credential = await navigator.credentials.create({ publicKey: options });
+      if (!credential) {
+        throw new Error('Credential creation failed or cancelled.');
+      }
+
+      const credentialId = credential.id;
+      const publicKeyBuffer = credential.response.getPublicKey();
+      const publicKeyBase64Url = bufferToBase64Url(publicKeyBuffer);
+
+      const verifyRes = await fetch('/api/auth/passkey/register-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: recruiterEmail,
+          credentialId,
+          publicKey: publicKeyBase64Url
+        })
+      });
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json();
+        throw new Error(err.error || 'Failed to verify and save passkey');
+      }
+
+      setHasPasskey(true);
+      localStorage.setItem('recruiterHasPasskey', 'true');
+      alert('Passkey successfully registered! You can now use passwordless login.');
+    } catch (err) {
+      console.error('Passkey registration error:', err);
+      setAuthError(err.message);
+    } finally {
+      setIsRegisteringPasskey(false);
+    }
+  };
+
+  const handlePasskeyLogin = async (e) => {
+    if (e) e.preventDefault();
+    if (!emailInput) {
+      setAuthError('Please enter your email to login with passkey.');
       return;
     }
-    setPasscode(loginInput);
-    setIsAuthenticated(true);
-    localStorage.setItem('recruiterPasscode', loginInput);
+    setAuthError('');
+    try {
+      const res = await fetch('/api/auth/passkey/login-challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to get login challenge');
+      }
+      const options = await res.json();
+
+      options.challenge = base64UrlToBuffer(options.challenge);
+      if (options.allowCredentials) {
+        options.allowCredentials = options.allowCredentials.map(cred => ({
+          ...cred,
+          id: base64UrlToBuffer(cred.id)
+        }));
+      }
+
+      const credential = await navigator.credentials.get({ publicKey: options });
+      if (!credential) {
+        throw new Error('Passkey login cancelled or failed.');
+      }
+
+      const credentialId = credential.id;
+      const clientDataJSON = bufferToBase64Url(credential.response.clientDataJSON);
+      const authenticatorData = bufferToBase64Url(credential.response.authenticatorData);
+      const signature = bufferToBase64Url(credential.response.signature);
+
+      const verifyRes = await fetch('/api/auth/passkey/login-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailInput,
+          credentialId,
+          clientDataJSON,
+          authenticatorData,
+          signature
+        })
+      });
+
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json();
+        throw new Error(err.error || 'Passkey login verification failed.');
+      }
+
+      const data = await verifyRes.json();
+      setToken(data.token);
+      setRecruiterEmail(data.email);
+      setIsAuthenticated(true);
+      setHasPasskey(true);
+
+      localStorage.setItem('recruiterToken', data.token);
+      localStorage.setItem('recruiterEmail', data.email);
+      localStorage.setItem('recruiterHasPasskey', 'true');
+    } catch (err) {
+      console.error('Passkey login error:', err);
+      setAuthError(err.message);
+    }
+  };
+
+  const handlePasswordLogin = async (e) => {
+    e.preventDefault();
+    if (!emailInput || !passwordInput) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+    setAuthError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput, password: passwordInput })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed.');
+      }
+      setToken(data.token);
+      setRecruiterEmail(data.email);
+      setIsAuthenticated(true);
+      setHasPasskey(data.hasPasskey);
+
+      localStorage.setItem('recruiterToken', data.token);
+      localStorage.setItem('recruiterEmail', data.email);
+      localStorage.setItem('recruiterHasPasskey', data.hasPasskey ? 'true' : 'false');
+      setPasswordInput('');
+    } catch (err) {
+      setAuthError(err.message);
+    }
+  };
+
+  const handlePasswordSignup = async (e) => {
+    e.preventDefault();
+    if (!emailInput || !passwordInput) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+    setAuthError('');
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput, password: passwordInput })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Signup failed.');
+      }
+      setToken(data.token);
+      setRecruiterEmail(data.email);
+      setIsAuthenticated(true);
+      setHasPasskey(false);
+
+      localStorage.setItem('recruiterToken', data.token);
+      localStorage.setItem('recruiterEmail', data.email);
+      localStorage.setItem('recruiterHasPasskey', 'false');
+      setPasswordInput('');
+    } catch (err) {
+      setAuthError(err.message);
+    }
   };
 
   const handleLogout = () => {
-    setPasscode('');
+    setToken('');
+    setRecruiterEmail('');
     setIsAuthenticated(false);
-    localStorage.removeItem('recruiterPasscode');
-    setLoginInput('');
+    setHasPasskey(false);
+    localStorage.removeItem('recruiterToken');
+    localStorage.removeItem('recruiterEmail');
+    localStorage.removeItem('recruiterHasPasskey');
+    setEmailInput('');
+    setPasswordInput('');
+    setAuthError('');
   };
 
 
@@ -195,7 +421,49 @@ function App() {
             </header>
 
             {/* Statistics Dashboard */}
-            <StatsBanner />
+            <StatsBanner jobs={jobs} />
+
+            {/* Filter Controls Row */}
+            <div className="filter-controls-row">
+              {/* Search & Filter Header */}
+              <div className="filter-bar glass">
+                <div className="search-wrapper">
+                  <Search className="search-icon" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Search verified roles, keywords, or companies..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+
+                <div className="status-filter-tabs">
+                  {['All', 'Verified', 'Suspicious', 'Scam'].map((filter) => (
+                    <button
+                      key={filter}
+                      className={`filter-tab-btn ${activeFilter === filter ? 'active' : ''}`}
+                      onClick={() => setActiveFilter(filter)}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Category Pills */}
+              <div className="category-pills">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    className={`category-pill ${activeCategory === category ? 'active' : ''}`}
+                    onClick={() => setActiveCategory(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Main Interactive Grid */}
             <div className="board-grid">
@@ -204,6 +472,9 @@ function App() {
                   jobs={jobs} 
                   selectedJob={selectedJob} 
                   onSelectJob={setSelectedJob} 
+                  searchTerm={searchTerm}
+                  activeCategory={activeCategory}
+                  activeFilter={activeFilter}
                 />
               </div>
               <div className="inspector-column">
@@ -234,37 +505,176 @@ function App() {
             {!isAuthenticated ? (
               <div className="login-panel glass text-center animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '4rem auto', padding: '2.5rem', borderRadius: 'var(--radius-md)', maxWidth: '420px', gap: '1.25rem', width: '100%' }}>
                 <Shield className="panel-icon logo-large" size={48} style={{ color: 'var(--primary-bright)', marginBottom: '0.5rem' }} />
-                <h2>Recruiter Console Access</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center' }}>Please enter the authorization passcode to manage and post vetted jobs.</p>
-                <form onSubmit={handleLogin} className="login-form" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <input
-                    type="password"
-                    placeholder="Enter recruiter passcode..."
-                    value={loginInput}
-                    onChange={(e) => setLoginInput(e.target.value)}
-                    required
-                    style={{
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '0.75rem 1rem',
-                      fontSize: '0.95rem',
-                      color: 'white',
-                      textAlign: 'center',
-                      outline: 'none'
-                    }}
-                  />
-                  <button type="submit" className="recruiter-submit-btn" style={{ margin: 0 }}>
-                    Unlock Console
-                  </button>
-                </form>
+                
+                {authMode === 'login' ? (
+                  <>
+                    <h2>Recruiter Sign In</h2>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center' }}>Access the secure job board using your corporate credentials.</p>
+                    {authError && <div style={{ color: '#f43f5e', fontSize: '0.85rem', fontWeight: 600 }}>{authError}</div>}
+                    <form onSubmit={handlePasswordLogin} className="login-form" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <input
+                        type="email"
+                        placeholder="Corporate Email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        required
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '0.75rem 1rem',
+                          fontSize: '0.95rem',
+                          color: 'white',
+                          outline: 'none'
+                        }}
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password"
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        required
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '0.75rem 1rem',
+                          fontSize: '0.95rem',
+                          color: 'white',
+                          outline: 'none'
+                        }}
+                      />
+                      <button type="submit" className="recruiter-submit-btn" style={{ margin: 0 }}>
+                        Sign In
+                      </button>
+                    </form>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        Need a corporate account?{' '}
+                        <button type="button" onClick={() => { setAuthMode('register'); setAuthError(''); }} style={{ background: 'none', border: 'none', color: 'var(--primary-bright)', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                          Sign Up
+                        </button>
+                      </span>
+                      <button type="button" onClick={() => { setAuthMode('passkey'); setAuthError(''); }} style={{ background: 'none', border: 'none', color: 'var(--primary-bright)', cursor: 'pointer', padding: 0, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
+                        <Zap size={14} /> Log in with Passkey
+                      </button>
+                    </div>
+                  </>
+                ) : authMode === 'register' ? (
+                  <>
+                    <h2>Recruiter Sign Up</h2>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center' }}>Register with your official company email. Public domains (Gmail, Yahoo, etc.) are blocked.</p>
+                    {authError && <div style={{ color: '#f43f5e', fontSize: '0.85rem', fontWeight: 600 }}>{authError}</div>}
+                    <form onSubmit={handlePasswordSignup} className="login-form" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <input
+                        type="email"
+                        placeholder="Corporate Email (e.g. name@company.com)"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        required
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '0.75rem 1rem',
+                          fontSize: '0.95rem',
+                          color: 'white',
+                          outline: 'none'
+                        }}
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password"
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        required
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '0.75rem 1rem',
+                          fontSize: '0.95rem',
+                          color: 'white',
+                          outline: 'none'
+                        }}
+                      />
+                      <button type="submit" className="recruiter-submit-btn" style={{ margin: 0 }}>
+                        Create Account
+                      </button>
+                    </form>
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        Already have an account?{' '}
+                        <button type="button" onClick={() => { setAuthMode('login'); setAuthError(''); }} style={{ background: 'none', border: 'none', color: 'var(--primary-bright)', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                          Sign In
+                        </button>
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2>Passkey Sign In</h2>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center' }}>Enter your email to verify your identity passwordlessly via your registered passkey.</p>
+                    {authError && <div style={{ color: '#f43f5e', fontSize: '0.85rem', fontWeight: 600 }}>{authError}</div>}
+                    <form onSubmit={handlePasskeyLogin} className="login-form" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <input
+                        type="email"
+                        placeholder="Corporate Email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        required
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '0.75rem 1rem',
+                          fontSize: '0.95rem',
+                          color: 'white',
+                          outline: 'none'
+                        }}
+                      />
+                      <button type="submit" className="recruiter-submit-btn" style={{ margin: 0 }}>
+                        Verify with Passkey
+                      </button>
+                    </form>
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                      <button type="button" onClick={() => { setAuthMode('login'); setAuthError(''); }} style={{ background: 'none', border: 'none', color: 'var(--primary-bright)', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                        Back to Password Sign In
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <>
                 <header className='page-header' style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                   <div>
                     <h1>Recruiter Console</h1>
-                    <p>Post new vacancies and analyze their legitimacy profiles. All listings undergo a security assessment against scam indicators prior to indexing.</p>
+                    <p>Logged in as <strong style={{ color: 'white' }}>{recruiterEmail}</strong>. All listings undergo a security assessment prior to indexing.</p>
+                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                      {!hasPasskey ? (
+                        <button
+                          onClick={handleRegisterPasskey}
+                          disabled={isRegisteringPasskey}
+                          style={{
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            border: '1px solid rgba(99, 102, 241, 0.3)',
+                            color: 'var(--primary-bright)',
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: 'var(--radius-sm)',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          {isRegisteringPasskey ? 'Enrolling Passkey...' : 'Register Passkey'}
+                        </button>
+                      ) : (
+                        <span style={{ color: '#10b981', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <CheckCircle size={14} /> Passkey Enrolled
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <button onClick={handleLogout} className="modal-cancel-btn" style={{ height: 'fit-content', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#f43f5e', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     Lock Console
@@ -470,6 +880,21 @@ function App() {
         </div>
       </footer>
 
+      {/* Mobile/Tablet Inspector Modal (rendered at root to escape CSS transforms) */}
+      {selectedJob && (
+        <div 
+          className="mobile-inspector-modal"
+          onClick={() => setSelectedJob(null)}
+        >
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <JobInspector 
+              job={selectedJob} 
+              onClose={() => setSelectedJob(null)} 
+            />
+          </div>
+        </div>
+      )}
+
       <style>{`
         .main-content {
           flex-grow: 1;
@@ -541,6 +966,20 @@ function App() {
         .inspector-column {
           position: sticky;
           top: 1.5rem;
+          min-width: 0;
+        }
+
+        @media (min-width: 1201px) {
+          .list-column {
+            position: sticky;
+            top: 1.5rem;
+            height: calc(100vh - 3rem);
+          }
+          .inspector-column {
+            position: sticky;
+            top: 1.5rem;
+            height: calc(100vh - 3rem);
+          }
         }
 
         /* Modal Styles */
@@ -754,12 +1193,37 @@ function App() {
           letter-spacing: 0.5px;
         }
 
-        @media (max-width: 968px) {
+        /* Mobile Inspector Modal Overlay */
+        .mobile-inspector-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(4, 6, 12, 0.6);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 1.5rem;
+        }
+
+        @media (min-width: 1201px) {
+          .mobile-inspector-modal {
+            display: none;
+          }
+        }
+
+        @media (max-width: 1200px) {
           .board-grid {
             grid-template-columns: 1fr;
+            gap: 0;
           }
+          
           .inspector-column {
-            position: static;
+            display: none;
           }
         }
 
@@ -1064,6 +1528,124 @@ function App() {
         @media (max-width: 968px) {
           .recruiter-grid {
             grid-template-columns: 1fr;
+          }
+        }
+
+        .filter-controls-row {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-bottom: 2rem;
+          width: 100%;
+        }
+
+        .filter-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          padding: 0.75rem 1.25rem;
+          gap: 1rem;
+          border-radius: var(--radius-md);
+        }
+
+        .search-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          flex-grow: 1;
+          min-width: 260px;
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid var(--border-color);
+          padding: 0.5rem 1rem;
+          border-radius: var(--radius-sm);
+        }
+
+        .search-icon {
+          color: var(--text-muted);
+          flex-shrink: 0;
+        }
+
+        .search-input {
+          width: 100%;
+          font-size: 0.95rem;
+          outline: none;
+        }
+
+        .search-input::placeholder {
+          color: var(--text-dark);
+        }
+
+        .status-filter-tabs {
+          display: flex;
+          gap: 0.25rem;
+          background: rgba(0, 0, 0, 0.2);
+          padding: 0.25rem;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--border-color);
+          flex-shrink: 0;
+          flex-grow: 1;
+          justify-content: space-around;
+        }
+
+        .filter-tab-btn {
+          padding: 0.4rem 1rem;
+          border-radius: calc(var(--radius-sm) - 3px);
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all var(--transition-fast);
+          color: var(--text-muted);
+        }
+
+        .filter-tab-btn:hover {
+          color: var(--text-main);
+        }
+
+        .filter-tab-btn.active {
+          background: rgba(255, 255, 255, 0.08);
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .category-pills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+
+        .category-pill {
+          padding: 0.4rem 1rem;
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid var(--border-color);
+          border-radius: 50px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          color: var(--text-muted);
+          cursor: pointer;
+          transition: all var(--transition-fast);
+        }
+
+        .category-pill:hover, .category-pill.active {
+          background: rgba(99, 102, 241, 0.1);
+          border-color: rgba(99, 102, 241, 0.3);
+          color: #ffffff;
+        }
+
+        @media (max-width: 768px) {
+          .filter-bar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.75rem;
+          }
+          
+          .status-filter-tabs {
+            justify-content: space-between;
+          }
+          
+          .filter-tab-btn {
+            flex-grow: 1;
+            text-align: center;
           }
         }
       `}</style>
