@@ -953,7 +953,7 @@ app.listen(PORT, async () => {
     
     // Automatic background job ingestion interval
     // Defaulting to 30 minutes (30 * 60 * 1000)
-    const SYNC_INTERVAL_MS = 3 * 60 * 1000;
+    const SYNC_INTERVAL_MS = 30 * 60 * 1000;
     console.log(`Starting automatic background job ingestion (runs every ${SYNC_INTERVAL_MS / 60000} minutes)`);
     
     setInterval(async () => {
