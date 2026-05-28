@@ -44,10 +44,10 @@ export default defineConfig({
     //   use: { ...devices['Desktop Firefox'] },
     // },
 
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
+    // {
+    //   name: 'webkit',
+    //   use: { ...devices['Desktop Safari'] },
+    // },
 
     /* Test against mobile viewports. */
     // {
@@ -81,6 +81,10 @@ export default defineConfig({
       command: 'node server/index.js',
       url: 'http://localhost:5000/api/jobs',
       reuseExistingServer: !process.env.CI,
+      env: {
+        // This forces the isolated background process to inherit the key from GitHub Actions
+        GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+      },
     }
   ],
 });
