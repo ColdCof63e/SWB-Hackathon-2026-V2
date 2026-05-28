@@ -235,7 +235,7 @@ test.describe('TrustRemote End-to-End Tests', () => {
     await expect(warningBanner).toContainText('Non-Remote Role Alert');
   });
 
-  test.only('Negative: Recruiter Console submits a hybrid job and Inspector flags it', async ({ page }) => {
+  test('Negative: Recruiter Console submits a hybrid job and Inspector flags it', async ({ page }) => {
     // 1. Listen for browser alert popups
     page.on('dialog', async (dialog) => {
       await dialog.accept();
@@ -278,7 +278,7 @@ test.describe('TrustRemote End-to-End Tests', () => {
 
 });
 
-test.describe.only('Recruiter Console', () => {
+test.describe('Recruiter Console', () => {
   test.beforeEach(async ({page}) => {
     await page.goto(BASE_URL)
   })
